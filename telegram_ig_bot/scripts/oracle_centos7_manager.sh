@@ -379,10 +379,11 @@ prompt_value() {
   local result
   if [[ -n "$default_value" ]]; then
     read -r -p "$prompt [$default_value]: " result || true
+    result="$(printf '%s' "$result" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
     echo "${result:-$default_value}"
   else
     read -r -p "$prompt: " result || true
-    echo "$result"
+    printf '%s' "$result" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
   fi
 }
 
@@ -391,7 +392,7 @@ prompt_secret() {
   local result
   read -r -s -p "$prompt: " result || true
   echo
-  echo "$result"
+  printf '%s' "$result" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
 }
 
 verify_bot_token() {
