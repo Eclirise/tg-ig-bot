@@ -227,8 +227,21 @@ build_runtime() {
     run_root bash -lc "source /opt/rh/devtoolset-11/enable 2>/dev/null || source /opt/rh/devtoolset-10/enable 2>/dev/null || true; cd '$BUILD_DIR/openssl-${openssl_version}' && ./Configure --prefix='$openssl_prefix' --openssldir='$openssl_prefix/ssl' linux-x86_64 shared zlib && make -j1 && make install_sw"
   fi
 
+  local rebuild_python=0
   if [[ ! -x "$python_prefix/bin/python3.11" || "$("$python_prefix/bin/python3.11" -V 2>&1 | awk '{print $2}')" != "$python_version" ]]; then
+    rebuild_python=1
+  elif ! "$python_prefix/bin/python3.11" - <<'PY' >/dev/null 2>&1
+import ssl
+print(ssl.OPENSSL_VERSION)
+PY
+  then
+    warn "检测到现有 Python 缺少 ssl 模块，准备强制重编译。"
+    rebuild_python=1
+  fi
+
+  if [[ "$rebuild_python" -eq 1 ]]; then
     log "编译 Python ${python_version}"
+    rm -rf "$python_prefix"
     rm -rf "$BUILD_DIR/Python-$python_version" "$BUILD_DIR/Python-$python_version.tgz"
     run_root bash -lc "cd '$BUILD_DIR' && curl -fsSLO 'https://www.python.org/ftp/python/${python_version}/Python-${python_version}.tgz' && tar -xzf 'Python-${python_version}.tgz'"
     run_root bash -lc "source /opt/rh/devtoolset-11/enable 2>/dev/null || source /opt/rh/devtoolset-10/enable 2>/dev/null || true; cd '$BUILD_DIR/Python-${python_version}' && CPPFLAGS='-I${openssl_prefix}/include' LDFLAGS='-L${openssl_prefix}/lib' ./configure --prefix='$python_prefix' --with-openssl='$openssl_prefix' --with-openssl-rpath=auto --with-ensurepip=install && make -j1 && make install"
@@ -239,8 +252,26 @@ python_bin() { echo "$RUNTIME_DIR/python-3.11/bin/python3.11"; }
 venv_python_bin() { echo "$VENV_DIR/bin/python"; }
 venv_pip_bin() { echo "$VENV_DIR/bin/pip"; }
 
+python_supports_ssl() {
+  local python_exe="$1"
+  [[ -x "$python_exe" ]] || return 1
+  "$python_exe" - <<'PY' >/dev/null 2>&1
+import ssl
+print(ssl.OPENSSL_VERSION)
+PY
+}
+
+venv_is_healthy() {
+  [[ -x "$(venv_python_bin)" ]] || return 1
+  [[ -x "$(venv_pip_bin)" ]] || return 1
+  python_supports_ssl "$(venv_python_bin)" || return 1
+  "$(venv_pip_bin)" --version >/dev/null 2>&1
+}
+
 ensure_python_runtime() {
-  [[ -x "$(python_bin)" ]] || build_runtime
+  if [[ ! -x "$(python_bin)" ]] || ! python_supports_ssl "$(python_bin)"; then
+    build_runtime
+  fi
 }
 
 shrink_runtime_footprint() {
@@ -254,6 +285,10 @@ shrink_runtime_footprint() {
 
 install_python_dependencies() {
   ensure_python_runtime
+  if [[ -d "$VENV_DIR" ]] && ! venv_is_healthy; then
+    warn "检测到现有虚拟环境异常，准备重建。"
+    run_root rm -rf "$VENV_DIR"
+  fi
   if [[ ! -d "$VENV_DIR" ]]; then
     if [[ "$(id -u)" -eq 0 && "$RUN_USER" != "root" ]]; then
       run_as_user "$RUN_USER" "$(python_bin)" -m venv "$VENV_DIR"
