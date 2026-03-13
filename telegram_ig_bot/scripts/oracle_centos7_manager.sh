@@ -227,6 +227,11 @@ build_runtime() {
     run_root bash -lc "source /opt/rh/devtoolset-11/enable 2>/dev/null || source /opt/rh/devtoolset-10/enable 2>/dev/null || true; cd '$BUILD_DIR/openssl-${openssl_version}' && ./Configure --prefix='$openssl_prefix' --openssldir='$openssl_prefix/ssl' linux-x86_64 shared zlib && make -j1 && make install_sw"
   fi
 
+  [[ -x "$openssl_prefix/bin/openssl" ]] || die "OpenSSL 构建失败：缺少 $openssl_prefix/bin/openssl"
+  "$openssl_prefix/bin/openssl" version >/dev/null 2>&1 || die "OpenSSL 构建失败：openssl 可执行文件无法运行"
+  [[ -f "$openssl_prefix/include/openssl/ssl.h" ]] || die "OpenSSL 构建失败：缺少 ssl.h 头文件"
+  compgen -G "$openssl_prefix/lib*/libssl*" >/dev/null || die "OpenSSL 构建失败：缺少 libssl 库文件"
+
   local rebuild_python=0
   if [[ ! -x "$python_prefix/bin/python3.11" || "$("$python_prefix/bin/python3.11" -V 2>&1 | awk '{print $2}')" != "$python_version" ]]; then
     rebuild_python=1
@@ -246,6 +251,8 @@ PY
     run_root bash -lc "cd '$BUILD_DIR' && curl -fsSLO 'https://www.python.org/ftp/python/${python_version}/Python-${python_version}.tgz' && tar -xzf 'Python-${python_version}.tgz'"
     run_root bash -lc "source /opt/rh/devtoolset-11/enable 2>/dev/null || source /opt/rh/devtoolset-10/enable 2>/dev/null || true; cd '$BUILD_DIR/Python-${python_version}' && CPPFLAGS='-I${openssl_prefix}/include' LDFLAGS='-L${openssl_prefix}/lib' ./configure --prefix='$python_prefix' --with-openssl='$openssl_prefix' --with-openssl-rpath=auto --with-ensurepip=install && make -j1 && make install"
   fi
+
+  python_supports_ssl "$python_prefix/bin/python3.11" || die "Python 构建失败：ssl 模块不可用，请检查 $BUILD_DIR/Python-${python_version} 下的 configure 输出与 Modules/_ssl 构建日志"
 }
 
 python_bin() { echo "$RUNTIME_DIR/python-3.11/bin/python3.11"; }
