@@ -1,0 +1,10 @@
+﻿aiogram>=3.15,<4.0
+APScheduler>=3.10,<4.0
+python-dotenv>=1.0,<2.0
+instaloader>=4.14,<5.0
+gallery-dl>=1.29,<2.0
+yt-dlp>=2026.1.0
+requests>=2.32,<3.0
+tzdata>=2025.2
+pytest>=8.0,<9.0
+pytest-asyncio>=0.24,<1.0

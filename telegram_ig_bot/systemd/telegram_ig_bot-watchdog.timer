@@ -1,0 +1,11 @@
+﻿[Unit]
+Description=telegram_ig_bot watchdog timer
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Persistent=true
+Unit=telegram_ig_bot-watchdog.service
+
+[Install]
+WantedBy=timers.target

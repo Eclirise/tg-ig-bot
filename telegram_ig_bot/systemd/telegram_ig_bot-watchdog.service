@@ -1,0 +1,10 @@
+﻿[Unit]
+Description=telegram_ig_bot watchdog
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/tg-ig-bot/telegram_ig_bot
+ExecStart=/usr/local/bin/tg-ig-botctl internal-watchdog

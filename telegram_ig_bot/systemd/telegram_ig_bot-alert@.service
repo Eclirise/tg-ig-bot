@@ -1,0 +1,10 @@
+﻿[Unit]
+Description=telegram_ig_bot alert for %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/tg-ig-bot/telegram_ig_bot
+ExecStart=/bin/bash -lc '/usr/local/bin/tg-ig-botctl internal-alert "systemd 服务异常" "服务 %i 异常退出，请执行 tg-ig-botctl status 和 tg-ig-botctl logs 排查。"'

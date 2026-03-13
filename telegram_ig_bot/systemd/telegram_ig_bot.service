@@ -1,0 +1,27 @@
+﻿[Unit]
+Description=telegram_ig_bot
+After=network-online.target
+Wants=network-online.target
+OnFailure=telegram_ig_bot-alert@%n.service
+
+[Service]
+Type=simple
+User=CHANGE_ME
+Group=CHANGE_ME
+WorkingDirectory=/opt/tg-ig-bot/telegram_ig_bot
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/opt/tg-ig-bot/telegram_ig_bot/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EnvironmentFile=/opt/tg-ig-bot/telegram_ig_bot/.env
+ExecStart=/opt/tg-ig-bot/telegram_ig_bot/.venv/bin/python -m app.main
+Restart=always
+RestartSec=20
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=false
+ReadWritePaths=/opt/tg-ig-bot/telegram_ig_bot
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target
