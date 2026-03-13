@@ -31,16 +31,29 @@ else
   SUDO=""
 fi
 
+join_cmd() {
+  local first=1
+  local part
+  for part in "$@"; do
+    if [[ "$first" -eq 1 ]]; then
+      printf '%s' "$part"
+      first=0
+    else
+      printf ' %s' "$part"
+    fi
+  done
+}
+
 log() { echo "[tg-ig-bot] $*"; }
 warn() { echo "[tg-ig-bot][WARN] $*" >&2; }
 die() { echo "[tg-ig-bot][ERROR] $*" >&2; exit 1; }
-run() { log "$*"; "$@"; }
+run() { log "$(join_cmd "$@")"; "$@"; }
 run_root() {
   if [[ -n "$SUDO" ]]; then
-    log "$SUDO $*"
+    log "$(join_cmd "$SUDO" "$@")"
     $SUDO "$@"
   else
-    log "$*"
+    log "$(join_cmd "$@")"
     "$@"
   fi
 }
@@ -48,12 +61,23 @@ run_as_user() {
   local target_user="$1"
   shift
   if command -v sudo >/dev/null 2>&1; then
-    log "sudo -u $target_user $*"
+    log "$(join_cmd sudo -u "$target_user" "$@")"
     sudo -u "$target_user" "$@"
   else
     local quoted
     quoted=$(printf ' %q' "$@")
     run_root su -s /bin/bash - "$target_user" -c "${quoted# }"
+  fi
+}
+
+git_in_install_dir() {
+  if [[ "$(id -u)" -eq 0 && "$RUN_USER" != "root" ]]; then
+    run_as_user "$RUN_USER" bash -lc 'cd "$1" && shift && git "$@"' _ "$INSTALL_DIR" "$@"
+  else
+    (
+      cd "$INSTALL_DIR"
+      git "$@"
+    )
   fi
 }
 
@@ -582,7 +606,7 @@ configure_env_interactive() {
   fi
 
   local repo_origin
-  repo_origin="$(git -C "$INSTALL_DIR" config --get remote.origin.url 2>/dev/null || true)"
+  repo_origin="$(git_in_install_dir config --get remote.origin.url 2>/dev/null || true)"
   [[ -n "$repo_origin" ]] && log "当前仓库来源：$repo_origin"
 
   local bot_token bot_username admin_id="" ig_username poll_interval detected_lines choice selected_line verify_output env_token
@@ -835,10 +859,10 @@ internal_watchdog() {
 
 update_code() {
   local branch
-  branch="$(git -C "$INSTALL_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
-  run_as_user "$RUN_USER" git -C "$INSTALL_DIR" fetch --all --tags --prune
-  run_as_user "$RUN_USER" git -C "$INSTALL_DIR" checkout "$branch"
-  run_as_user "$RUN_USER" git -C "$INSTALL_DIR" pull --ff-only origin "$branch"
+  branch="$(git_in_install_dir rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+  git_in_install_dir fetch --all --tags --prune
+  git_in_install_dir checkout "$branch"
+  git_in_install_dir pull --ff-only origin "$branch"
   install_python_dependencies
   run "$(venv_python_bin)" -m compileall "$APP_DIR/app"
   restart_service
