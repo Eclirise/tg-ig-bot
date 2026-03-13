@@ -569,6 +569,7 @@ load_env_file() {
 }
 
 configure_env_interactive() {
+  validate_install_location
   ensure_python_runtime
   local existing_token="" existing_admin="" existing_ig="" existing_poll="10"
   if [[ -f "$ENV_FILE" ]]; then
@@ -635,6 +636,7 @@ configure_env_interactive() {
 }
 
 refresh_instagram_session() {
+  validate_install_location
   load_env_file
   [[ -n "${INSTAGRAM_USERNAME:-}" ]] || die "INSTAGRAM_USERNAME 为空，请先执行 configure。"
   log "将使用账号 ${INSTAGRAM_USERNAME} 重新生成 session。可能会要求输入密码/验证码。"
