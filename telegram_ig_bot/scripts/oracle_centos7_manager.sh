@@ -59,6 +59,12 @@ run_as_user() {
 
 validate_install_location() {
   if [[ "$INSTALL_DIR" == /root/* && "$RUN_USER" != "root" ]]; then
+    if [[ "$(id -u)" -eq 0 ]]; then
+      warn "安装目录 $INSTALL_DIR 位于 /root 下，检测到继承的运行用户是 $RUN_USER。将改用 root 继续安装。"
+      RUN_USER="root"
+      RUN_GROUP="root"
+      return
+    fi
     die "安装目录 $INSTALL_DIR 位于 /root 下，但运行用户是 $RUN_USER。普通用户无法穿过 /root 创建虚拟环境。请改用 /opt/tg-ig-bot 或 /home/$RUN_USER/tg-ig-bot。"
   fi
 }
