@@ -111,14 +111,20 @@ class Database:
         with self._lock, self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO chats(chat_id, title, type, created_at, updated_at)
+                INSERT OR IGNORE INTO chats(chat_id, title, type, created_at, updated_at)
                 VALUES(?, ?, ?, ?, ?)
-                ON CONFLICT(chat_id) DO UPDATE SET
-                    title=excluded.title,
-                    type=excluded.type,
-                    updated_at=excluded.updated_at
                 """,
                 (chat_id, title, chat_type, now, now),
+            )
+            conn.execute(
+                """
+                UPDATE chats
+                SET title = ?,
+                    type = ?,
+                    updated_at = ?
+                WHERE chat_id = ?
+                """,
+                (title, chat_type, now, chat_id),
             )
 
     def set_chat_enabled(
@@ -134,7 +140,7 @@ class Database:
         with self._lock, self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO chats(
+                INSERT OR IGNORE INTO chats(
                     chat_id,
                     title,
                     type,
@@ -145,13 +151,6 @@ class Database:
                     updated_at
                 )
                 VALUES(?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(chat_id) DO UPDATE SET
-                    title=excluded.title,
-                    type=excluded.type,
-                    is_enabled=excluded.is_enabled,
-                    enabled_by=excluded.enabled_by,
-                    enabled_at=excluded.enabled_at,
-                    updated_at=excluded.updated_at
                 """,
                 (
                     chat_id,
@@ -163,6 +162,19 @@ class Database:
                     now,
                     now,
                 ),
+            )
+            conn.execute(
+                """
+                UPDATE chats
+                SET title = ?,
+                    type = ?,
+                    is_enabled = ?,
+                    enabled_by = ?,
+                    enabled_at = ?,
+                    updated_at = ?
+                WHERE chat_id = ?
+                """,
+                (title, chat_type, int(enabled), enabled_by, now if enabled else None, now, chat_id),
             )
 
     def is_chat_enabled(self, chat_id: int) -> bool:
@@ -213,7 +225,7 @@ class Database:
         with self._lock, self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO subscriptions(
+                INSERT OR IGNORE INTO subscriptions(
                     chat_id,
                     username,
                     ig_feed_enabled,
@@ -224,13 +236,6 @@ class Database:
                     updated_at
                 )
                 VALUES(?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(chat_id, username) DO UPDATE SET
-                    ig_feed_enabled=excluded.ig_feed_enabled,
-                    story_enabled=excluded.story_enabled,
-                    status=excluded.status,
-                    next_check_at=excluded.next_check_at,
-                    last_error=NULL,
-                    updated_at=excluded.updated_at
                 """,
                 (
                     chat_id,
@@ -242,6 +247,19 @@ class Database:
                     now,
                     now,
                 ),
+            )
+            conn.execute(
+                """
+                UPDATE subscriptions
+                SET ig_feed_enabled = ?,
+                    story_enabled = ?,
+                    status = ?,
+                    next_check_at = ?,
+                    last_error = NULL,
+                    updated_at = ?
+                WHERE chat_id = ? AND username = ? COLLATE NOCASE
+                """,
+                (int(ig_feed_enabled), int(story_enabled), status.value, next_check_at, now, chat_id, username),
             )
 
     def get_subscription(self, chat_id: int, username: str) -> Subscription | None:
@@ -328,7 +346,7 @@ class Database:
         with self._lock, self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO subscription_checkpoints(
+                INSERT OR IGNORE INTO subscription_checkpoints(
                     chat_id,
                     username,
                     subscription_type,
@@ -337,12 +355,18 @@ class Database:
                     updated_at
                 )
                 VALUES(?, ?, ?, ?, ?, ?)
-                ON CONFLICT(chat_id, username, subscription_type) DO UPDATE SET
-                    last_media_at=excluded.last_media_at,
-                    last_media_key=excluded.last_media_key,
-                    updated_at=excluded.updated_at
                 """,
                 (chat_id, username, subscription_type, last_media_at, last_media_key, now),
+            )
+            conn.execute(
+                """
+                UPDATE subscription_checkpoints
+                SET last_media_at = ?,
+                    last_media_key = ?,
+                    updated_at = ?
+                WHERE chat_id = ? AND username = ? COLLATE NOCASE AND subscription_type = ?
+                """,
+                (last_media_at, last_media_key, now, chat_id, username, subscription_type),
             )
 
     def get_checkpoint(
@@ -403,13 +427,19 @@ class Database:
         with self._lock, self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO settings(chat_id, key, value, updated_at)
+                INSERT OR IGNORE INTO settings(chat_id, key, value, updated_at)
                 VALUES(?, ?, ?, ?)
-                ON CONFLICT(chat_id, key) DO UPDATE SET
-                    value=excluded.value,
-                    updated_at=excluded.updated_at
                 """,
                 (chat_id, key, value, now),
+            )
+            conn.execute(
+                """
+                UPDATE settings
+                SET value = ?,
+                    updated_at = ?
+                WHERE chat_id = ? AND key = ?
+                """,
+                (value, now, chat_id, key),
             )
 
     def get_setting(self, chat_id: int, key: str) -> str | None:
@@ -436,12 +466,18 @@ class Database:
         with self._lock, self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO daily_stats(date_key, chat_id, stat_key, value)
-                VALUES(?, ?, ?, ?)
-                ON CONFLICT(date_key, chat_id, stat_key) DO UPDATE SET
-                    value = value + excluded.value
+                INSERT OR IGNORE INTO daily_stats(date_key, chat_id, stat_key, value)
+                VALUES(?, ?, ?, 0)
                 """,
-                (date_key, chat_id, stat_key, amount),
+                (date_key, chat_id, stat_key),
+            )
+            conn.execute(
+                """
+                UPDATE daily_stats
+                SET value = value + ?
+                WHERE date_key = ? AND chat_id = ? AND stat_key = ?
+                """,
+                (amount, date_key, chat_id, stat_key),
             )
 
     def get_daily_stats(self, date_key: str, *, chat_id: int = 0) -> DailyStatsSummary:
