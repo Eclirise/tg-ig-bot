@@ -15,6 +15,7 @@ from app.bot.states import InteractionState
 from app.config import AppConfig
 from app.db import Database
 from app.services.auth_service import AccessService
+from app.services.maintenance_service import MaintenanceService
 from app.services.parse_service import ParseService
 from app.services.settings_service import SettingsService
 from app.services.stats_service import StatsService
@@ -34,6 +35,7 @@ class HandlerContext:
     subscription_service: SubscriptionService
     settings_service: SettingsService
     stats_service: StatsService
+    maintenance_service: MaintenanceService
     background_tasks: set[asyncio.Task[Any]] = field(default_factory=set)
 
 
@@ -98,7 +100,7 @@ def build_router(context: HandlerContext) -> Router:
         return False
 
     async def begin_parse(message: Message, url: str) -> None:
-        progress = await message.answer("???????????")
+        progress = await message.answer("检测到下载命令，准备开始处理。")
         track_task(
             context.parse_service.parse_and_send(
                 message.bot,
@@ -147,6 +149,17 @@ def build_router(context: HandlerContext) -> Router:
         )
         await message.answer(texts.HELP_TEXT + extra, reply_markup=keyboards.main_menu_keyboard())
 
+    @router.message(Command("commands"))
+    @router.message(F.text == "命令列表")
+    async def commands_handler(message: Message) -> None:
+        await remember_chat(message)
+        if not await access_allowed(message):
+            return
+        text = texts.COMMANDS_TEXT
+        if not context.access_service.is_admin(message.from_user.id if message.from_user else None):
+            text = text.split("\n\n管理员命令", 1)[0]
+        await message.answer(text, reply_markup=keyboards.main_menu_keyboard())
+
     @router.message(Command("chatid"))
     async def chat_id_handler(message: Message) -> None:
         await remember_chat(message)
@@ -163,6 +176,22 @@ def build_router(context: HandlerContext) -> Router:
             return
         stats = context.stats_service.get_today_summary(chat_id=0)
         await message.answer(texts.format_stats(stats, title="??????"), reply_markup=keyboards.main_menu_keyboard())
+
+    @router.message(Command("update_tools"))
+    async def update_tools_handler(message: Message) -> None:
+        await remember_chat(message)
+        if not await access_allowed(message, admin_command=True):
+            return
+        if str(message.chat.type) != "private":
+            await message.answer("请在私聊中使用 /update_tools，避免群里误触发。")
+            return
+        progress = await message.answer("正在更新下载工具并执行自检，这可能需要 1 到 3 分钟。")
+        try:
+            result = await context.maintenance_service.update_downloader_tools()
+        except Exception as exc:
+            await progress.edit_text(f"下载工具更新失败。\n\n{exc}")
+            return
+        await progress.edit_text(result.render_message())
 
     @router.message(Command("listgroups"))
     async def list_groups_handler(message: Message) -> None:

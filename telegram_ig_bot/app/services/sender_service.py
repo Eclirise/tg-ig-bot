@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 
 from aiogram import Bot
 from aiogram.types import FSInputFile, InputMediaPhoto, InputMediaVideo
@@ -26,6 +27,7 @@ class SenderService:
         result: DownloadResult,
         *,
         reply_to_message_id: int | None = None,
+        progress_callback: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> bool:
         sent_ok = False
         try:
@@ -37,8 +39,12 @@ class SenderService:
                     result.caption,
                     reply_to_message_id=reply_to_message_id,
                 )
+                if progress_callback is not None:
+                    await progress_callback(1, 1)
             else:
-                for batch_index, batch in enumerate(self._chunks(result.items, 10)):
+                batches = self._chunks(result.items, 10)
+                total_batches = len(batches)
+                for batch_index, batch in enumerate(batches):
                     caption = result.caption if batch_index == 0 else None
                     media_group = []
                     for item_index, item in enumerate(batch):
@@ -63,6 +69,8 @@ class SenderService:
                         reply_to_message_id=reply_to_message_id,
                         allow_sending_without_reply=True,
                     )
+                    if progress_callback is not None:
+                        await progress_callback(batch_index + 1, total_batches)
             sent_ok = True
             return True
         except Exception:

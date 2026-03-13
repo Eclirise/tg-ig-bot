@@ -66,6 +66,7 @@ usage() {
   configure         重新写入 .env 配置
   refresh-session   重新生成 Instagram session
   update            拉取最新代码并重装依赖
+  update-tools      仅更新 Instaloader / gallery-dl / yt-dlp 并自检
   restart           重启服务
   start             启动服务
   stop              停止服务
@@ -256,12 +257,55 @@ install_python_dependencies() {
   fi
   if [[ "$(id -u)" -eq 0 && "$RUN_USER" != "root" ]]; then
     run_as_user "$RUN_USER" "$(venv_pip_bin)" install --no-cache-dir --upgrade pip setuptools wheel
-    run_as_user "$RUN_USER" "$(venv_pip_bin)" install --no-cache-dir -r "$APP_DIR/requirements.txt"
+    run_as_user "$RUN_USER" "$(venv_pip_bin)" install --no-cache-dir --upgrade -r "$APP_DIR/requirements.txt"
   else
     run "$(venv_pip_bin)" install --no-cache-dir --upgrade pip setuptools wheel
-    run "$(venv_pip_bin)" install --no-cache-dir -r "$APP_DIR/requirements.txt"
+    run "$(venv_pip_bin)" install --no-cache-dir --upgrade -r "$APP_DIR/requirements.txt"
   fi
   shrink_runtime_footprint
+}
+
+show_downloader_tool_versions() {
+  local instaloader_version="missing"
+  local gallery_dl_version="missing"
+  local yt_dlp_version="missing"
+
+  if [[ -x "$VENV_DIR/bin/instaloader" ]]; then
+    instaloader_version="$($VENV_DIR/bin/instaloader --version 2>/dev/null | head -n 1 || echo unknown)"
+  fi
+  if [[ -x "$VENV_DIR/bin/gallery-dl" ]]; then
+    gallery_dl_version="$($VENV_DIR/bin/gallery-dl --version 2>/dev/null | head -n 1 || echo unknown)"
+  fi
+  if [[ -x "$VENV_DIR/bin/yt-dlp" ]]; then
+    yt_dlp_version="$($VENV_DIR/bin/yt-dlp --version 2>/dev/null | head -n 1 || echo unknown)"
+  fi
+
+  echo "Instaloader：$instaloader_version"
+  echo "gallery-dl：$gallery_dl_version"
+  echo "yt-dlp：$yt_dlp_version"
+}
+
+verify_downloader_tools() {
+  local failed=0
+
+  if [[ ! -x "$VENV_DIR/bin/instaloader" ]] || ! "$VENV_DIR/bin/instaloader" --version >/dev/null 2>&1; then
+    warn "Instaloader 自检失败"
+    failed=1
+  fi
+  if [[ ! -x "$VENV_DIR/bin/gallery-dl" ]] || ! "$VENV_DIR/bin/gallery-dl" --version >/dev/null 2>&1; then
+    warn "gallery-dl 自检失败"
+    failed=1
+  fi
+  if [[ ! -x "$VENV_DIR/bin/yt-dlp" ]] || ! "$VENV_DIR/bin/yt-dlp" --version >/dev/null 2>&1; then
+    warn "yt-dlp 自检失败"
+    failed=1
+  fi
+  if [[ -x "$VENV_DIR/bin/pip" ]] && ! "$VENV_DIR/bin/pip" check >/dev/null 2>&1; then
+    warn "pip check 失败"
+    failed=1
+  fi
+
+  return "$failed"
 }
 
 prompt_value() {
@@ -660,6 +704,21 @@ update_code() {
   show_status
 }
 
+update_downloader_tools() {
+  install_python_dependencies
+  if [[ "$(id -u)" -eq 0 && "$RUN_USER" != "root" ]]; then
+    run_as_user "$RUN_USER" "$(venv_python_bin)" -m compileall "$APP_DIR/app"
+  else
+    run "$(venv_python_bin)" -m compileall "$APP_DIR/app"
+  fi
+  verify_downloader_tools || die "下载工具更新后自检失败，请查看上面的输出。"
+  echo
+  echo "下载工具更新完成，当前版本："
+  show_downloader_tool_versions
+  echo
+  echo "建议随后执行一次 tg-ig-botctl restart，让 Instaloader 模块立即加载新版本。"
+}
+
 doctor() {
   echo "安装目录：$INSTALL_DIR"
   echo "应用目录：$APP_DIR"
@@ -675,6 +734,7 @@ doctor() {
   fi
   [[ -x "$(python_bin)" ]] && echo "Python：$("$(python_bin)" -V 2>&1)"
   [[ -x "$VENV_DIR/bin/pip" ]] && echo "aiogram：$($VENV_DIR/bin/pip show aiogram 2>/dev/null | awk '/Version:/{print $2}')"
+  show_downloader_tool_versions
   echo "systemd：$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo unknown)"
 }
 
@@ -710,6 +770,7 @@ install_or_repair() {
   tg-ig-botctl status
   tg-ig-botctl logs
   tg-ig-botctl update
+  tg-ig-botctl update-tools
   tg-ig-botctl cleanup
   tg-ig-botctl refresh-session
 EOF
@@ -737,12 +798,13 @@ menu() {
 2. 重新配置 .env
 3. 刷新 Instagram session
 4. 更新代码并重启
-5. 重启服务
-6. 查看状态
-7. 查看日志
-8. 清理缓存
-9. 体检 doctor
-10. 卸载
+5. 仅更新下载工具
+6. 重启服务
+7. 查看状态
+8. 查看日志
+9. 清理缓存
+10. 体检 doctor
+11. 卸载
 0. 退出
 ======================================
 EOF
@@ -753,12 +815,13 @@ EOF
       2) configure_env_interactive ;;
       3) refresh_instagram_session ;;
       4) update_code ;;
-      5) restart_service ;;
-      6) show_status ;;
-      7) show_logs ;;
-      8) cleanup_cache ;;
-      9) doctor ;;
-      10) uninstall_everything ;;
+      5) update_downloader_tools ;;
+      6) restart_service ;;
+      7) show_status ;;
+      8) show_logs ;;
+      9) cleanup_cache ;;
+      10) doctor ;;
+      11) uninstall_everything ;;
       0) break ;;
       *) warn '无效选项' ;;
     esac
@@ -774,6 +837,7 @@ main() {
     configure) configure_env_interactive ;;
     refresh-session) refresh_instagram_session ;;
     update) update_code ;;
+    update-tools) update_downloader_tools ;;
     restart) restart_service ;;
     start) start_service ;;
     stop) stop_service ;;

@@ -108,9 +108,34 @@ CentOS 7 ??????????
 tg-ig-botctl status
 tg-ig-botctl logs
 tg-ig-botctl update
+tg-ig-botctl update-tools
 tg-ig-botctl cleanup
 tg-ig-botctl refresh-session
 tg-ig-botctl uninstall
+```
+
+## tmux 安装建议
+
+如果你在 CentOS / Oracle VPS 上安装时经常断线，建议先在 tmux 里运行安装。
+
+```bash
+sudo yum install -y tmux
+tmux new -s botinstall
+sudo -i
+cd /root/tg-ig-bot
+bash telegram_ig_bot/scripts/oracle_centos7_manager.sh install
+```
+
+如果 SSH 断开，重新登录后执行：
+
+```bash
+tmux attach -t botinstall
+```
+
+如果不确定之前的安装是不是还在跑，可以先检查：
+
+```bash
+ps -ef | grep -E 'make|gcc|pip install' | grep -v grep
 ```
 
 ## ??

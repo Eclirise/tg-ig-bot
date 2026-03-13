@@ -8,6 +8,7 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text="解析链接"), KeyboardButton(text="订阅管理")],
             [KeyboardButton(text="设置"), KeyboardButton(text="帮助")],
+            [KeyboardButton(text="命令列表")],
         ],
         resize_keyboard=True,
     )

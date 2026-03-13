@@ -1,0 +1,27 @@
+# Python caches
+**/__pycache__/
+**/.pytest_cache/
+
+# Local virtual environments
+**/.venv/
+
+# Runtime data and secrets
+telegram_ig_bot/.env
+telegram_ig_bot/data/
+telegram_ig_bot/logs/
+
+# Build/runtime artifacts from CentOS install script
+telegram_ig_bot/.build/
+telegram_ig_bot/.runtime/
+
+# Local pytest scratch directories
+pytest-cache-files-*/
+telegram_ig_bot/.pytest_tmp/
+telegram_ig_bot/.pytest_tmp_run_*/
+telegram_ig_bot/pytest_tmp_run_*/
+telegram_ig_bot/pytest_probe_dir/
+
+# OS/editor noise
+*.log
+.DS_Store
+Thumbs.db

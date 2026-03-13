@@ -19,6 +19,7 @@ from app.logging_setup import install_telegram_alert_handler, setup_logging
 from app.scheduler.jobs import create_scheduler
 from app.services.auth_service import AccessService
 from app.services.cleanup_service import CleanupService
+from app.services.maintenance_service import MaintenanceService
 from app.services.parse_service import ParseService
 from app.services.sender_service import SenderService
 from app.services.settings_service import SettingsService
@@ -38,6 +39,7 @@ async def main() -> None:
     settings_service = SettingsService(db, config)
     cleanup_service = CleanupService()
     stats_service = StatsService(db, config)
+    maintenance_service = MaintenanceService(config)
     sender_service = SenderService(cleanup_service, config)
     router = DownloaderRouter(
         [
@@ -69,10 +71,19 @@ async def main() -> None:
     await bot.set_my_commands(
         [
             BotCommand(command="start", description="开始使用机器人"),
+            BotCommand(command="commands", description="查看命令列表"),
             BotCommand(command="ig", description="解析 Instagram 链接"),
             BotCommand(command="tg", description="解析 Instagram 链接"),
             BotCommand(command="help", description="查看帮助"),
+            BotCommand(command="chatid", description="管理员查看当前聊天 ID"),
+            BotCommand(command="enable_here", description="管理员在当前群启用机器人"),
+            BotCommand(command="disable_here", description="管理员在当前群停用机器人"),
+            BotCommand(command="knowngroups", description="管理员查看已记录群组"),
+            BotCommand(command="allowgroup", description="管理员允许指定群组"),
+            BotCommand(command="denygroup", description="管理员禁止指定群组"),
+            BotCommand(command="listgroups", description="管理员查看已启用群组"),
             BotCommand(command="stats", description="管理员查看今日统计"),
+            BotCommand(command="update_tools", description="管理员更新下载工具并自检"),
         ]
     )
 
@@ -87,6 +98,7 @@ async def main() -> None:
                 subscription_service=subscription_service,
                 settings_service=settings_service,
                 stats_service=stats_service,
+                maintenance_service=maintenance_service,
             )
         )
     )

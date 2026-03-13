@@ -34,36 +34,94 @@ class ParseService:
         reply_to_message_id: int | None = None,
     ) -> None:
         result = None
+        current_progress_message_id = progress_message_id
         try:
+            current_progress_message_id = await self._replace_progress(
+                bot,
+                chat_id,
+                current_progress_message_id,
+                "正在下载 Instagram 内容，请稍候。",
+            )
             result = await self.router.download(url)
+            current_progress_message_id = await self._replace_progress(
+                bot,
+                chat_id,
+                current_progress_message_id,
+                f"下载完成，正在发送{self._describe_result(result)}。",
+            )
+
+            async def update_send_progress(sent_units: int, total_units: int) -> None:
+                nonlocal current_progress_message_id
+                current_progress_message_id = await self._replace_progress(
+                    bot,
+                    chat_id,
+                    current_progress_message_id,
+                    self._sending_progress_text(result, sent_units, total_units),
+                )
+
             success = await self.sender_service.send_download(
                 bot,
                 chat_id,
                 result,
                 reply_to_message_id=reply_to_message_id,
+                progress_callback=update_send_progress,
             )
             if not success:
                 raise DownloadError("媒体已解析，但发送到 Telegram 失败。")
             self.stats_service.record_delivery(chat_id, result, count_parse_request=True)
-            await self._set_progress(bot, chat_id, progress_message_id, f"解析完成，已发送。后端：{result.backend_name}")
+            await self._clear_progress(bot, chat_id, current_progress_message_id)
         except Exception as exc:
             logger.exception("手动解析失败: chat_id=%s url=%s", chat_id, url)
-            await self._set_progress(bot, chat_id, progress_message_id, f"解析失败：{self._safe_error_text(exc)}")
+            await self._replace_progress(
+                bot,
+                chat_id,
+                current_progress_message_id,
+                f"解析失败：{self._safe_error_text(exc)}",
+            )
 
-    async def _set_progress(
+    async def _replace_progress(
         self,
         bot: Bot,
         chat_id: int,
         progress_message_id: int | None,
         text: str,
+    ) -> int | None:
+        await self._clear_progress(bot, chat_id, progress_message_id)
+        try:
+            message = await bot.send_message(chat_id, text)
+            return message.message_id
+        except Exception:
+            return progress_message_id
+
+    async def _clear_progress(
+        self,
+        bot: Bot,
+        chat_id: int,
+        progress_message_id: int | None,
     ) -> None:
         if progress_message_id is None:
-            await bot.send_message(chat_id, text)
             return
         try:
-            await bot.edit_message_text(text=text, chat_id=chat_id, message_id=progress_message_id)
+            await bot.delete_message(chat_id=chat_id, message_id=progress_message_id)
         except Exception:
-            await bot.send_message(chat_id, text)
+            pass
+
+    @staticmethod
+    def _describe_result(result) -> str:
+        if len(result.items) > 1:
+            return "图集"
+        item = result.items[0]
+        if item.media_type.name == "VIDEO":
+            return "视频"
+        if item.media_type.name == "IMAGE":
+            return "图片"
+        return "文件"
+
+    def _sending_progress_text(self, result, sent_units: int, total_units: int) -> str:
+        media_text = self._describe_result(result)
+        if total_units <= 1:
+            return f"正在发送{media_text}。"
+        return f"正在发送{media_text}，进度 {sent_units}/{total_units}。"
 
     @staticmethod
     def _safe_error_text(exc: Exception) -> str:
