@@ -417,6 +417,10 @@ print((payload.get("result") or {}).get("username", ""))
 PY
 }
 
+normalize_input() {
+  printf '%s' "$1" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+}
+
 auto_detect_admin_id() {
   local token="$1"
   "$(python_bin)" - "$token" <<'PY'
@@ -528,16 +532,26 @@ configure_env_interactive() {
   repo_origin="$(git -C "$INSTALL_DIR" config --get remote.origin.url 2>/dev/null || true)"
   [[ -n "$repo_origin" ]] && log "当前仓库来源：$repo_origin"
 
-  local bot_token bot_username admin_id="" ig_username poll_interval detected_lines choice selected_line
+  local bot_token bot_username admin_id="" ig_username poll_interval detected_lines choice selected_line verify_output env_token
+  env_token="$(normalize_input "${BOT_TOKEN:-${TELEGRAM_BOT_TOKEN:-}}")"
   while true; do
-    bot_token="$(prompt_secret '请输入 Telegram Bot Token')"
+    if [[ -n "$env_token" ]]; then
+      bot_token="$env_token"
+      env_token=""
+      log "检测到环境变量中的 Telegram Bot Token，开始校验。"
+    else
+      bot_token="$(prompt_value '请输入 Telegram Bot Token（明文显示）' "$existing_token")"
+    fi
     bot_token="${bot_token:-$existing_token}"
     [[ -n "$bot_token" ]] || { warn 'Bot Token 不能为空'; continue; }
-    if bot_username="$(verify_bot_token "$bot_token" 2>/dev/null)"; then
+    bot_token="$(normalize_input "$bot_token")"
+    verify_output="$(verify_bot_token "$bot_token" 2>&1)"
+    if [[ $? -eq 0 ]]; then
+      bot_username="$verify_output"
       log "Bot Token 有效，机器人用户名：@$bot_username"
       break
     fi
-    warn "Token 校验失败，请重新输入。"
+    warn "Token 校验失败：$verify_output"
   done
 
   echo
