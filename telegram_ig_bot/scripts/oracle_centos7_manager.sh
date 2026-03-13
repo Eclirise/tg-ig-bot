@@ -57,6 +57,12 @@ run_as_user() {
   fi
 }
 
+validate_install_location() {
+  if [[ "$INSTALL_DIR" == /root/* && "$RUN_USER" != "root" ]]; then
+    die "安装目录 $INSTALL_DIR 位于 /root 下，但运行用户是 $RUN_USER。普通用户无法穿过 /root 创建虚拟环境。请改用 /opt/tg-ig-bot 或 /home/$RUN_USER/tg-ig-bot。"
+  fi
+}
+
 usage() {
   cat <<EOF
 用法：bash scripts/oracle_centos7_manager.sh <命令>
@@ -739,6 +745,7 @@ doctor() {
 }
 
 install_or_repair() {
+  validate_install_location
   build_runtime
   configure_firewall
   install_python_dependencies
