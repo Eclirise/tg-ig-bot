@@ -18,11 +18,12 @@ HELP_TEXT = """帮助
 1. 支持帖子、Reel、Story 链接，Story 需要有效会话。
 2. 可直接发送 /tg <链接> 或 /ig <链接>。
 3. 群里首次使用前，需要管理员发送 /enable_here。
-4. 管理员可以用 /chatid、/knowngroups、/allowgroup、/denygroup 管理群权限。
-5. 订阅支持 IG 动态 和 Story 两种模式。
-6. 如果群里收不到命令，请去 BotFather 关闭 Privacy Mode。
-7. 如果要抓取 Story 或受限内容，需要准备有效的 Instagram session / cookies。
-8. 输入 /commands 可以查看完整命令列表。"""
+4. 订阅支持 IG 动态 和 Story 两种模式，可用菜单或 /subadd、/submod、/unsubscribe 管理。
+5. 管理员可以用 /knownusers、/allowuser、/denyuser 管理可用私聊账号。
+6. 管理员私聊里可先用 /targetchat <chat_id> 切到目标用户或群，再远程管理该聊天的订阅与轮询设置。
+7. 如果群里收不到命令，请去 BotFather 关闭 Privacy Mode。
+8. 如果要抓取 Story 或受限内容，需要准备有效的 Instagram session / cookies。
+9. 输入 /commands 可以查看完整命令列表。"""
 ADMIN_HELP_TEXT = """管理员命令
 
 /chatid 查看当前聊天 ID
@@ -31,9 +32,19 @@ ADMIN_HELP_TEXT = """管理员命令
 /knowngroups 查看已记录群组
 /allowgroup <chat_id> 允许指定群组
 /denygroup <chat_id> 禁止指定群组
+/knownusers 查看已记录私聊用户
+/listusers 查看已授权私聊用户
+/allowuser <user_id> 允许指定私聊用户
+/denyuser <user_id> 禁止指定私聊用户
+/targetchat <chat_id> 切换私聊里的远程管理目标
+/cleartarget 清除远程管理目标
 /listgroups 查看已启用群组
 /stats 查看今日统计
 /update_tools 更新 Instaloader / gallery-dl / yt-dlp 并自检
+/subadd <username> <feed|story|both> 新增订阅
+/submod <username> <only_feed|only_story|both|disable_feed|disable_story|unsubscribe> 修改订阅
+/unsubscribe <username> 退订
+/subs 查看当前聊天订阅
 /commands 查看完整命令列表
 /help 查看帮助"""
 COMMANDS_TEXT = """命令列表
@@ -44,6 +55,10 @@ COMMANDS_TEXT = """命令列表
 /commands 查看完整命令列表
 /ig <Instagram链接> 解析 Instagram 链接
 /tg <Instagram链接> 解析 Instagram 链接
+/subs 查看当前聊天订阅
+/subadd <username> <feed|story|both> 新增订阅
+/submod <username> <only_feed|only_story|both|disable_feed|disable_story|unsubscribe> 修改订阅
+/unsubscribe <username> 退订
 
 管理员命令
 /chatid 查看当前聊天 ID
@@ -52,6 +67,12 @@ COMMANDS_TEXT = """命令列表
 /knowngroups 查看已记录群组
 /allowgroup <chat_id> 允许指定群组
 /denygroup <chat_id> 禁止指定群组
+/knownusers 查看已记录私聊用户
+/listusers 查看已授权私聊用户
+/allowuser <user_id> 允许指定私聊用户
+/denyuser <user_id> 禁止指定私聊用户
+/targetchat <chat_id> 切换私聊里的远程管理目标
+/cleartarget 清除远程管理目标
 /listgroups 查看已启用群组
 /stats 查看今日统计
 /update_tools 更新 Instaloader / gallery-dl / yt-dlp 并执行自检
@@ -138,4 +159,26 @@ def format_known_groups(groups: list[RuntimeGroup]) -> str:
         lines.append(
             f"{group.title or '未命名群组'} | chat_id={group.chat_id} | 类型={group.chat_type or '未知'} | 状态={status}"
         )
+    return "\n".join(lines)
+
+
+def format_enabled_private_users(users: list[RuntimeGroup]) -> str:
+    if not users:
+        return "当前没有已授权的私聊用户。"
+    lines = ["已授权私聊用户"]
+    for user in users:
+        lines.append(f"{user.title or '未命名用户'} | user_id={user.chat_id} | 授权时间={format_dt(user.enabled_at)}")
+    return "\n".join(lines)
+
+
+def format_known_private_users(users: list[RuntimeGroup], *, admin_user_id: int) -> str:
+    if not users:
+        return "当前还没有记录到任何私聊用户，请先让对方私聊 bot 并发送 /start。"
+    lines = ["已记录私聊用户"]
+    for user in users:
+        if user.chat_id == admin_user_id:
+            status = "管理员"
+        else:
+            status = "已授权" if user.is_enabled else "未授权"
+        lines.append(f"{user.title or '未命名用户'} | user_id={user.chat_id} | 状态={status}")
     return "\n".join(lines)

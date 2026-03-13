@@ -6,3 +6,4 @@ class InteractionState(StatesGroup):
     waiting_add_username = State()
     waiting_modify_username = State()
     waiting_unsubscribe_username = State()
+    waiting_target_chat_id = State()

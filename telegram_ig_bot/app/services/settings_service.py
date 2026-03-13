@@ -17,6 +17,7 @@ class RuntimeSnapshot:
 
 class SettingsService:
     POLL_INTERVAL_KEY = "poll_interval_minutes"
+    ADMIN_TARGET_CHAT_KEY = "admin_target_chat_id"
     ALLOWED_INTERVALS = (5, 10)
 
     def __init__(self, db: Database, config: AppConfig) -> None:
@@ -40,6 +41,23 @@ class SettingsService:
             raise ValueError("轮询频率仅支持 5 分钟或 10 分钟。")
         self.db.set_setting(chat_id, self.POLL_INTERVAL_KEY, str(minutes))
         return minutes
+
+    def get_admin_target_chat_id(self, admin_chat_id: int) -> int | None:
+        value = self.db.get_setting(admin_chat_id, self.ADMIN_TARGET_CHAT_KEY)
+        if not value:
+            return None
+        try:
+            target_chat_id = int(value)
+        except ValueError:
+            return None
+        return target_chat_id if target_chat_id != 0 else None
+
+    def set_admin_target_chat_id(self, admin_chat_id: int, target_chat_id: int) -> int:
+        self.db.set_setting(admin_chat_id, self.ADMIN_TARGET_CHAT_KEY, str(target_chat_id))
+        return target_chat_id
+
+    def clear_admin_target_chat_id(self, admin_chat_id: int) -> None:
+        self.db.set_setting(admin_chat_id, self.ADMIN_TARGET_CHAT_KEY, "")
 
     def cleanup_policy_text(self) -> str:
         if self.config.cleanup_after_send:

@@ -211,6 +211,28 @@ class Database:
             ).fetchall()
         return [self._row_to_runtime_group(row) for row in rows]
 
+    def list_enabled_private_users(self) -> list[RuntimeGroup]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM chats
+                WHERE type = 'private' AND is_enabled = 1
+                ORDER BY title COLLATE NOCASE ASC, chat_id ASC
+                """
+            ).fetchall()
+        return [self._row_to_runtime_group(row) for row in rows]
+
+    def list_known_private_users(self) -> list[RuntimeGroup]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM chats
+                WHERE type = 'private' AND chat_id > 0
+                ORDER BY is_enabled DESC, title COLLATE NOCASE ASC, chat_id ASC
+                """
+            ).fetchall()
+        return [self._row_to_runtime_group(row) for row in rows]
+
     def upsert_subscription(
         self,
         chat_id: int,
