@@ -115,3 +115,19 @@ async def test_router_rate_limit_stops_backend_fallback_and_sets_cooldown(tmp_pa
     assert first.download_calls == 1
     assert second.download_calls == 0
     assert router.remaining_rate_limit_cooldown_seconds() > 0
+
+
+@pytest.mark.asyncio()
+async def test_router_youtube_download_uses_ytdlp_only(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(router_module, "async_retry", single_try)
+    first = StubBackend("instaloader")
+    second = StubBackend("gallery-dl")
+    third = StubBackend("yt-dlp")
+    router = DownloaderRouter([first, second, third], temp_root=tmp_path, max_concurrent_downloads=1)
+
+    result = await router.download("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+    assert result.backend_name == "yt-dlp"
+    assert first.download_calls == 0
+    assert second.download_calls == 0
+    assert third.download_calls == 1

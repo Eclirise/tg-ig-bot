@@ -1,4 +1,12 @@
-﻿from app.utils.url_parser import InstagramTargetType, extract_instagram_url, parse_instagram_url
+﻿from app.utils.url_parser import (
+    InstagramTargetType,
+    MediaPlatform,
+    extract_instagram_url,
+    extract_supported_url,
+    parse_instagram_url,
+    parse_supported_url,
+    parse_youtube_url,
+)
 
 
 def test_parse_reel_url() -> None:
@@ -17,3 +25,20 @@ def test_parse_story_url() -> None:
 def test_extract_instagram_url_from_text() -> None:
     text = "看看这个 https://www.instagram.com/p/XYZ987/ 先"
     assert extract_instagram_url(text) == "https://www.instagram.com/p/XYZ987/"
+
+
+def test_parse_youtube_watch_url() -> None:
+    parsed = parse_youtube_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=1")
+    assert parsed.platform == MediaPlatform.YOUTUBE
+    assert parsed.video_id == "dQw4w9WgXcQ"
+
+
+def test_parse_supported_url_accepts_youtube_short_link() -> None:
+    parsed = parse_supported_url("https://youtu.be/dQw4w9WgXcQ")
+    assert parsed.platform == MediaPlatform.YOUTUBE
+    assert parsed.normalized_url == "https://youtu.be/dQw4w9WgXcQ"
+
+
+def test_extract_supported_url_from_text() -> None:
+    text = "看这个 https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    assert extract_supported_url(text) == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"

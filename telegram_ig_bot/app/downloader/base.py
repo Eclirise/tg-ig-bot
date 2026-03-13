@@ -5,7 +5,7 @@ from pathlib import Path
 
 from app.downloader.types import DownloadResult, RemoteMediaRef
 from app.models import SubscriptionCheckpoint, SubscriptionType
-from app.utils.url_parser import ParsedInstagramUrl
+from app.utils.url_parser import ParsedMediaUrl
 
 
 class DownloadError(RuntimeError):
@@ -24,7 +24,7 @@ class DownloaderBackend(ABC):
     async def download_url(
         self,
         url: str,
-        parsed_url: ParsedInstagramUrl,
+        parsed_url: ParsedMediaUrl,
         temp_dir: Path,
     ) -> DownloadResult:
         raise NotImplementedError

@@ -7,7 +7,7 @@ from app.config import AppConfig
 from app.downloader.base import DownloadError, DownloaderBackend
 from app.downloader.types import DownloadResult, MediaItem
 from app.models import MediaType
-from app.utils.url_parser import ParsedInstagramUrl
+from app.utils.url_parser import ParsedMediaUrl
 
 
 class YtDlpBackend(DownloaderBackend):
@@ -20,7 +20,7 @@ class YtDlpBackend(DownloaderBackend):
     async def download_url(
         self,
         url: str,
-        parsed_url: ParsedInstagramUrl,
+        parsed_url: ParsedMediaUrl,
         temp_dir: Path,
     ) -> DownloadResult:
         args = [
@@ -62,7 +62,7 @@ class YtDlpBackend(DownloaderBackend):
             for file in files
         ]
         return DownloadResult(
-            media_id=parsed_url.shortcode or items[0].media_id,
+            media_id=parsed_url.shortcode or parsed_url.video_id or items[0].media_id,
             shortcode=parsed_url.shortcode,
             username=parsed_url.username,
             caption=None,

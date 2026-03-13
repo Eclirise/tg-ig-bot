@@ -4,19 +4,19 @@ from app.models import DailyStatsSummary, RuntimeGroup, Subscription, format_dt
 from app.services.settings_service import RuntimeSnapshot
 
 
-START_TEXT = """Instagram 下载机器人
+START_TEXT = """Instagram / YouTube 下载机器人
 
-发送 /tg <Instagram链接> 或 /ig <Instagram链接> 就可以解析下载。
+发送 /tg <Instagram链接>、/ig <Instagram链接> 或 /yt <YouTube链接> 就可以解析下载。
 也可以直接把链接发给机器人，机器人会自动识别。
 如果要在群里使用，请先由管理员发送 /enable_here。"""
 
-PARSE_PROMPT = "请发送 Instagram 链接，或直接输入 /tg <链接>、/ig <链接>。"
+PARSE_PROMPT = "请发送 Instagram 或 YouTube 链接，或直接输入 /tg <链接>、/ig <链接>、/yt <链接>。"
 SUBSCRIPTION_MENU_TEXT = "订阅管理菜单"
 SETTINGS_MENU_TEXT = "设置菜单，支持查看运行状态和轮询频率。"
 HELP_TEXT = """帮助
 
 1. 支持帖子、Reel、Story 链接，Story 需要有效会话。
-2. 可直接发送 /tg <链接> 或 /ig <链接>。
+2. 可直接发送 /tg <链接>、/ig <链接> 或 /yt <链接>。
 3. 群里首次使用前，需要管理员发送 /enable_here。
 4. 订阅支持 IG 动态 和 Story 两种模式，可用菜单或 /subadd、/submod、/unsubscribe 管理。
 5. 管理员可以用 /knownusers、/allowuser、/denyuser 管理可用私聊账号。
@@ -55,6 +55,7 @@ COMMANDS_TEXT = """命令列表
 /commands 查看完整命令列表
 /ig <Instagram链接> 解析 Instagram 链接
 /tg <Instagram链接> 解析 Instagram 链接
+/yt <YouTube链接> 解析 YouTube 链接
 /subs 查看当前聊天订阅
 /subadd <username> <feed|story|both> 新增订阅
 /submod <username> <only_feed|only_story|both|disable_feed|disable_story|unsubscribe> 修改订阅

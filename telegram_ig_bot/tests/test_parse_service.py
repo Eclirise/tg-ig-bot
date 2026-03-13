@@ -90,3 +90,35 @@ async def test_parse_service_replaces_progress_and_clears_on_success(tmp_path: P
     assert "正在发送视频" in bot.sent_texts[2]
     assert bot.deleted_ids[-1] > 10
     assert stats.calls == 1
+
+
+@pytest.mark.asyncio()
+async def test_parse_service_reports_youtube_download_progress(tmp_path: Path) -> None:
+    item = MediaItem(
+        media_id="yt1",
+        shortcode=None,
+        media_type=MediaType.VIDEO,
+        local_path=tmp_path / "video.mp4",
+        caption=None,
+        source_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        username=None,
+        created_at=None,
+    )
+    result = DownloadResult(
+        media_id="yt1",
+        shortcode=None,
+        username=None,
+        caption=None,
+        source_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        created_at=None,
+        items=[item],
+    )
+    bot = StubBot()
+    sender = StubSenderService()
+    stats = StubStatsService()
+    service = ParseService(StubRouter(result), sender, stats)
+
+    await service.parse_and_send(bot, 123, result.source_url)
+
+    assert "正在下载 YouTube 内容" in bot.sent_texts[0]
+    assert stats.calls == 1

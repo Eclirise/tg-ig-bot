@@ -4,8 +4,6 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
 from aiogram.types import BotCommand
 
 from app.bot.handlers import HandlerContext, build_router
@@ -65,7 +63,6 @@ async def main() -> None:
 
     bot = Bot(
         token=config.telegram_bot_token,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     alert_service = install_telegram_alert_handler(bot, config)
     await bot.set_my_commands(
@@ -74,6 +71,7 @@ async def main() -> None:
             BotCommand(command="commands", description="查看命令列表"),
             BotCommand(command="ig", description="解析 Instagram 链接"),
             BotCommand(command="tg", description="解析 Instagram 链接"),
+            BotCommand(command="yt", description="解析 YouTube 链接"),
             BotCommand(command="subs", description="查看当前聊天订阅"),
             BotCommand(command="subadd", description="新增订阅"),
             BotCommand(command="submod", description="修改订阅"),

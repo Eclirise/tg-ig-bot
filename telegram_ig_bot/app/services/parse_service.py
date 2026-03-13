@@ -8,6 +8,7 @@ from app.downloader.base import DownloadError
 from app.downloader.router import DownloaderRouter
 from app.services.sender_service import SenderService
 from app.services.stats_service import StatsService
+from app.utils.url_parser import parse_supported_url
 
 
 logger = logging.getLogger(__name__)
@@ -36,11 +37,12 @@ class ParseService:
         result = None
         current_progress_message_id = progress_message_id
         try:
+            parsed_url = parse_supported_url(url)
             current_progress_message_id = await self._replace_progress(
                 bot,
                 chat_id,
                 current_progress_message_id,
-                "正在下载 Instagram 内容，请稍候。",
+                f"正在下载{self._platform_label(parsed_url)}内容，请稍候。",
             )
             result = await self.router.download(url)
             current_progress_message_id = await self._replace_progress(
@@ -122,6 +124,12 @@ class ParseService:
         if total_units <= 1:
             return f"正在发送{media_text}。"
         return f"正在发送{media_text}，进度 {sent_units}/{total_units}。"
+
+    @staticmethod
+    def _platform_label(parsed_url) -> str:
+        if parsed_url.is_youtube:
+            return " YouTube "
+        return " Instagram "
 
     @staticmethod
     def _safe_error_text(exc: Exception) -> str:

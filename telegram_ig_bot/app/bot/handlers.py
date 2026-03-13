@@ -20,7 +20,7 @@ from app.services.parse_service import ParseService
 from app.services.settings_service import SettingsService
 from app.services.stats_service import StatsService
 from app.services.subscription_service import SubscriptionService
-from app.utils.url_parser import extract_instagram_url, normalize_username
+from app.utils.url_parser import extract_supported_url, normalize_username
 
 
 logger = logging.getLogger(__name__)
@@ -172,11 +172,11 @@ def build_router(context: HandlerContext) -> Router:
     def resolve_url_from_message(message: Message, command: CommandObject | None = None) -> str | None:
         if command and command.args:
             return command.args.strip()
-        direct = extract_instagram_url(message.text or message.caption)
+        direct = extract_supported_url(message.text or message.caption)
         if direct:
             return direct
         if message.reply_to_message:
-            replied = extract_instagram_url(message.reply_to_message.text or message.reply_to_message.caption)
+            replied = extract_supported_url(message.reply_to_message.text or message.reply_to_message.caption)
             if replied:
                 return replied
         return None
@@ -417,13 +417,14 @@ def build_router(context: HandlerContext) -> Router:
 
     @router.message(Command("tg"))
     @router.message(Command("ig"))
+    @router.message(Command("yt"))
     async def parse_command_handler(message: Message, command: CommandObject) -> None:
         await remember_chat(message)
         if not await access_allowed(message):
             return
         url = resolve_url_from_message(message, command)
         if not url:
-            await message.answer("请发送 Instagram 链接，或者使用 /ig <链接>、/tg <链接>。")
+            await message.answer("请发送 Instagram 或 YouTube 链接，或者使用 /ig <链接>、/tg <链接>、/yt <链接>。")
             return
         await begin_parse(message, url)
 
@@ -564,7 +565,7 @@ def build_router(context: HandlerContext) -> Router:
             message.from_user.id if message.from_user else 0,
         )
         context.subscription_service.reschedule_chat(message.chat.id, immediate=True)
-        await message.answer("当前群已启用，可以直接使用 /ig 或 /tg。")
+        await message.answer("当前群已启用，可以直接使用 /ig、/tg 或 /yt。")
 
     @router.message(Command("disable_here"))
     async def disable_here_handler(message: Message) -> None:
@@ -600,7 +601,7 @@ def build_router(context: HandlerContext) -> Router:
             return
         url = resolve_url_from_message(message)
         if not url:
-            await message.answer("请发送有效的 Instagram 链接。")
+            await message.answer("请发送有效的 Instagram 或 YouTube 链接。")
             return
         await state.clear()
         await begin_parse(message, url)

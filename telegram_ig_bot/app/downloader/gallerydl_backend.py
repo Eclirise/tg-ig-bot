@@ -9,7 +9,7 @@ from app.config import AppConfig
 from app.downloader.base import DownloadError, DownloaderBackend, ListingError
 from app.downloader.types import DownloadResult, MediaItem, RemoteMediaRef
 from app.models import MediaType, SubscriptionCheckpoint, SubscriptionType
-from app.utils.url_parser import ParsedInstagramUrl, build_post_url, build_story_url
+from app.utils.url_parser import ParsedMediaUrl, build_post_url, build_story_url
 
 
 class GalleryDLBackend(DownloaderBackend):
@@ -22,7 +22,7 @@ class GalleryDLBackend(DownloaderBackend):
     async def download_url(
         self,
         url: str,
-        parsed_url: ParsedInstagramUrl,
+        parsed_url: ParsedMediaUrl,
         temp_dir: Path,
     ) -> DownloadResult:
         args = [

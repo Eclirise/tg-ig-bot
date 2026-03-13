@@ -12,7 +12,7 @@ from app.models import SubscriptionCheckpoint, SubscriptionType
 from app.utils.error_classifier import is_rate_limit_error
 from app.utils.retry import async_retry
 from app.utils.tempfiles import cleanup_path, create_temp_dir
-from app.utils.url_parser import InstagramTargetType, parse_instagram_url
+from app.utils.url_parser import InstagramTargetType, MediaPlatform, parse_supported_url
 
 
 logger = logging.getLogger(__name__)
@@ -46,12 +46,27 @@ class DownloaderRouter:
             ordered.append(backend)
         return ordered
 
+    def _iter_download_backends_for_platform(
+        self,
+        *,
+        platform: MediaPlatform,
+        target_type: InstagramTargetType | None,
+    ) -> list[DownloaderBackend]:
+        if platform == MediaPlatform.YOUTUBE:
+            return [backend for backend in self.backends if backend.name == "yt-dlp"]
+        if target_type is None:
+            raise DownloadError("无法识别 Instagram 链接类型。")
+        return self._iter_download_backends(target_type)
+
     async def download(self, url: str) -> DownloadResult:
-        parsed_url = parse_instagram_url(url)
+        parsed_url = parse_supported_url(url)
         last_error: BaseException | None = None
         async with self._semaphore:
             await self.wait_for_rate_limit_cooldown()
-            for backend in self._iter_download_backends(parsed_url.target_type):
+            for backend in self._iter_download_backends_for_platform(
+                platform=parsed_url.platform,
+                target_type=parsed_url.target_type,
+            ):
                 temp_dir = create_temp_dir(self.temp_root, prefix=f"{backend.name}-")
                 try:
                     result = await async_retry(
@@ -62,7 +77,12 @@ class DownloaderRouter:
                     )
                     result.backend_name = backend.name
                     result.temp_dir = temp_dir
-                    logger.info("下载成功: backend=%s url=%s", backend.name, parsed_url.normalized_url)
+                    logger.info(
+                        "下载成功: backend=%s platform=%s url=%s",
+                        backend.name,
+                        parsed_url.platform.value,
+                        parsed_url.normalized_url,
+                    )
                     return result
                 except Exception as exc:
                     last_error = exc

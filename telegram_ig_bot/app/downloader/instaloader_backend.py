@@ -12,7 +12,7 @@ from app.config import AppConfig
 from app.downloader.base import DownloadError, DownloaderBackend, ListingError
 from app.downloader.types import DownloadResult, MediaItem, RemoteMediaRef
 from app.models import MediaType, SubscriptionCheckpoint, SubscriptionType, normalize_datetime
-from app.utils.url_parser import InstagramTargetType, ParsedInstagramUrl, build_post_url, build_story_url
+from app.utils.url_parser import InstagramTargetType, ParsedMediaUrl, build_post_url, build_story_url
 
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ class InstaloaderBackend(DownloaderBackend):
     async def download_url(
         self,
         url: str,
-        parsed_url: ParsedInstagramUrl,
+        parsed_url: ParsedMediaUrl,
         temp_dir: Path,
     ) -> DownloadResult:
         return await asyncio.to_thread(self._download_url_sync, url, parsed_url, temp_dir)
@@ -49,8 +49,10 @@ class InstaloaderBackend(DownloaderBackend):
             limit,
         )
 
-    def _download_url_sync(self, url: str, parsed_url: ParsedInstagramUrl, temp_dir: Path) -> DownloadResult:
+    def _download_url_sync(self, url: str, parsed_url: ParsedMediaUrl, temp_dir: Path) -> DownloadResult:
         try:
+            if not parsed_url.is_instagram:
+                raise DownloadError("Instaloader 仅支持 Instagram 链接。")
             loader = self._build_loader()
             if parsed_url.target_type == InstagramTargetType.STORY:
                 return self._download_story(loader, parsed_url, temp_dir)
@@ -94,7 +96,7 @@ class InstaloaderBackend(DownloaderBackend):
             )
         return loader
 
-    def _download_post_like(self, loader: Any, parsed_url: ParsedInstagramUrl, temp_dir: Path) -> DownloadResult:
+    def _download_post_like(self, loader: Any, parsed_url: ParsedMediaUrl, temp_dir: Path) -> DownloadResult:
         import instaloader
 
         if not parsed_url.shortcode:
@@ -148,7 +150,7 @@ class InstaloaderBackend(DownloaderBackend):
             items=items,
         )
 
-    def _download_story(self, loader: Any, parsed_url: ParsedInstagramUrl, temp_dir: Path) -> DownloadResult:
+    def _download_story(self, loader: Any, parsed_url: ParsedMediaUrl, temp_dir: Path) -> DownloadResult:
         profile = self._load_profile(loader, parsed_url.username)
         session = self._get_session(loader)
         story_item = None
