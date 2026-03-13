@@ -215,28 +215,39 @@ fetch_latest_openssl_30_version() {
   echo "${version:-3.0.18}"
 }
 
+openssl_lib_dir() {
+  local openssl_prefix="$1"
+  if [[ -d "$openssl_prefix/lib64" ]]; then
+    echo "$openssl_prefix/lib64"
+  else
+    echo "$openssl_prefix/lib"
+  fi
+}
+
 build_runtime() {
   install_system_packages
   enable_devtoolset
   run mkdir -p "$BUILD_DIR" "$RUNTIME_DIR"
 
-  local openssl_version python_version openssl_prefix python_prefix
+  local openssl_version python_version openssl_prefix python_prefix openssl_libdir
   openssl_version="$(fetch_latest_openssl_30_version)"
   python_version="$(fetch_latest_python_311_version)"
   openssl_prefix="$RUNTIME_DIR/openssl-3.0"
   python_prefix="$RUNTIME_DIR/python-3.11"
+  openssl_libdir="$(openssl_lib_dir "$openssl_prefix")"
 
-  if [[ ! -x "$openssl_prefix/bin/openssl" || "$("$openssl_prefix/bin/openssl" version 2>/dev/null | awk '{print $2}')" != "$openssl_version" ]]; then
+  if [[ ! -x "$openssl_prefix/bin/openssl" || "$(LD_LIBRARY_PATH="$openssl_libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$openssl_prefix/bin/openssl" version 2>/dev/null | awk '{print $2}')" != "$openssl_version" ]]; then
     log "编译 OpenSSL ${openssl_version}"
     rm -rf "$BUILD_DIR/openssl-$openssl_version" "$BUILD_DIR/openssl-$openssl_version.tar.gz"
     run_root bash -lc "cd '$BUILD_DIR' && curl -fsSLO 'https://www.openssl.org/source/openssl-${openssl_version}.tar.gz' && tar -xzf 'openssl-${openssl_version}.tar.gz'"
     run_root bash -lc "source /opt/rh/devtoolset-11/enable 2>/dev/null || source /opt/rh/devtoolset-10/enable 2>/dev/null || true; cd '$BUILD_DIR/openssl-${openssl_version}' && ./Configure --prefix='$openssl_prefix' --openssldir='$openssl_prefix/ssl' linux-x86_64 shared zlib && make -j1 && make install_sw"
+    openssl_libdir="$(openssl_lib_dir "$openssl_prefix")"
   fi
 
   [[ -x "$openssl_prefix/bin/openssl" ]] || die "OpenSSL 构建失败：缺少 $openssl_prefix/bin/openssl"
-  "$openssl_prefix/bin/openssl" version >/dev/null 2>&1 || die "OpenSSL 构建失败：openssl 可执行文件无法运行"
+  LD_LIBRARY_PATH="$openssl_libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$openssl_prefix/bin/openssl" version >/dev/null 2>&1 || die "OpenSSL 构建失败：openssl 可执行文件无法运行"
   [[ -f "$openssl_prefix/include/openssl/ssl.h" ]] || die "OpenSSL 构建失败：缺少 ssl.h 头文件"
-  compgen -G "$openssl_prefix/lib*/libssl*" >/dev/null || die "OpenSSL 构建失败：缺少 libssl 库文件"
+  compgen -G "$openssl_libdir/libssl*" >/dev/null || die "OpenSSL 构建失败：缺少 libssl 库文件"
 
   local rebuild_python=0
   if [[ ! -x "$python_prefix/bin/python3.11" || "$("$python_prefix/bin/python3.11" -V 2>&1 | awk '{print $2}')" != "$python_version" ]]; then
@@ -255,7 +266,7 @@ PY
     rm -rf "$python_prefix"
     rm -rf "$BUILD_DIR/Python-$python_version" "$BUILD_DIR/Python-$python_version.tgz"
     run_root bash -lc "cd '$BUILD_DIR' && curl -fsSLO 'https://www.python.org/ftp/python/${python_version}/Python-${python_version}.tgz' && tar -xzf 'Python-${python_version}.tgz'"
-    run_root bash -lc "source /opt/rh/devtoolset-11/enable 2>/dev/null || source /opt/rh/devtoolset-10/enable 2>/dev/null || true; cd '$BUILD_DIR/Python-${python_version}' && CPPFLAGS='-I${openssl_prefix}/include' LDFLAGS='-L${openssl_prefix}/lib' ./configure --prefix='$python_prefix' --with-openssl='$openssl_prefix' --with-openssl-rpath=auto --with-ensurepip=install && make -j1 && make install"
+    run_root bash -lc "source /opt/rh/devtoolset-11/enable 2>/dev/null || source /opt/rh/devtoolset-10/enable 2>/dev/null || true; export LD_LIBRARY_PATH='$openssl_libdir':\"\${LD_LIBRARY_PATH:-}\"; cd '$BUILD_DIR/Python-${python_version}' && CPPFLAGS='-I${openssl_prefix}/include' LDFLAGS='-L${openssl_libdir} -Wl,-rpath,${openssl_libdir}' ./configure --prefix='$python_prefix' --with-openssl='$openssl_prefix' --with-openssl-rpath=auto --with-ensurepip=install && make -j1 && make install"
   fi
 
   python_supports_ssl "$python_prefix/bin/python3.11" || die "Python 构建失败：ssl 模块不可用，请检查 $BUILD_DIR/Python-${python_version} 下的 configure 输出与 Modules/_ssl 构建日志"
@@ -445,6 +456,9 @@ write_env_file() {
   local poll_interval="$4"
   local session_file="$APP_DIR/data/instagram.session"
   local cookies_file="$APP_DIR/data/instagram.cookies.txt"
+  local openssl_prefix="$RUNTIME_DIR/openssl-3.0"
+  local openssl_libdir
+  openssl_libdir="$(openssl_lib_dir "$openssl_prefix")"
   mkdir -p "$APP_DIR/data" "$APP_DIR/logs" "$APP_DIR/data/tmp"
   cat > "$ENV_FILE" <<EOF
 TELEGRAM_BOT_TOKEN=$bot_token
@@ -459,6 +473,9 @@ SQLITE_PATH=$APP_DIR/data/telegram_ig_bot.sqlite3
 INSTAGRAM_USERNAME=$ig_username
 INSTAGRAM_SESSION_FILE=$session_file
 INSTAGRAM_COOKIES_FILE=$cookies_file
+OPENSSL_DIR=$openssl_prefix
+OPENSSL_LIB_DIR=$openssl_libdir
+LD_LIBRARY_PATH=$openssl_libdir
 
 INSTALOADER_BINARY=$VENV_DIR/bin/instaloader
 GALLERY_DL_BINARY=$VENV_DIR/bin/gallery-dl
@@ -579,6 +596,7 @@ Group=$run_group
 WorkingDirectory=$APP_DIR
 Environment=PYTHONUNBUFFERED=1
 Environment=PATH=$VENV_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=LD_LIBRARY_PATH=$(openssl_lib_dir "$RUNTIME_DIR/openssl-3.0")
 EnvironmentFile=$ENV_FILE
 ExecStart=$VENV_DIR/bin/python -m app.main
 Restart=always
