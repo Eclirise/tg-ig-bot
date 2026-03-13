@@ -545,8 +545,7 @@ configure_env_interactive() {
     bot_token="${bot_token:-$existing_token}"
     [[ -n "$bot_token" ]] || { warn 'Bot Token 不能为空'; continue; }
     bot_token="$(normalize_input "$bot_token")"
-    verify_output="$(verify_bot_token "$bot_token" 2>&1)"
-    if [[ $? -eq 0 ]]; then
+    if verify_output="$(verify_bot_token "$bot_token" 2>&1)"; then
       bot_username="$verify_output"
       log "Bot Token 有效，机器人用户名：@$bot_username"
       break
