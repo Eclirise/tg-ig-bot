@@ -46,18 +46,56 @@ run_root() {
 }
 run_as_user() {
   local target_user="$1"
+
+    system_ca_bundle_file() {
+      local candidates=(
+        /etc/pki/tls/certs/ca-bundle.crt
+        /etc/ssl/certs/ca-certificates.crt
+        /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+      )
+      local candidate
+      for candidate in "${candidates[@]}"; do
+        if [[ -f "$candidate" ]]; then
+          echo "$candidate"
+          return 0
+        fi
+      done
+      return 1
+    }
+
+    system_ca_bundle_dir() {
+      local candidates=(
+        /etc/pki/tls/certs
+        /etc/ssl/certs
+      )
+      local candidate
+      for candidate in "${candidates[@]}"; do
+        if [[ -d "$candidate" ]]; then
+          echo "$candidate"
+          return 0
+        fi
+      done
+      return 1
+    }
   shift
   if command -v sudo >/dev/null 2>&1; then
     log "sudo -u $target_user $*"
-    sudo -u "$target_user" "$@"
+      local ca_file ca_dir
+      ca_file="$(system_ca_bundle_file || true)"
+      ca_dir="$(system_ca_bundle_dir || true)"
+      SSL_CERT_FILE="$ca_file" SSL_CERT_DIR="$ca_dir" "$(python_bin)" - "$token" "$ca_file" "$ca_dir" <<'PY'
   else
+    import ssl
     local quoted
     quoted=$(printf ' %q' "$@")
     run_root su -s /bin/bash - "$target_user" -c "${quoted# }"
   fi
+    ca_file = sys.argv[2] or None
+    ca_dir = sys.argv[3] or None
 }
+    context = ssl.create_default_context(cafile=ca_file, capath=ca_dir)
 
-validate_install_location() {
+        with urllib.request.urlopen(url, timeout=20, context=context) as response:
   if [[ "$INSTALL_DIR" == /root/* && "$RUN_USER" != "root" ]]; then
     if [[ "$(id -u)" -eq 0 ]]; then
       warn "安装目录 $INSTALL_DIR 位于 /root 下，检测到继承的运行用户是 $RUN_USER。将改用 root 继续安装。"
@@ -423,15 +461,22 @@ normalize_input() {
 
 auto_detect_admin_id() {
   local token="$1"
-  "$(python_bin)" - "$token" <<'PY'
+  local ca_file ca_dir
+  ca_file="$(system_ca_bundle_file || true)"
+  ca_dir="$(system_ca_bundle_dir || true)"
+  SSL_CERT_FILE="$ca_file" SSL_CERT_DIR="$ca_dir" "$(python_bin)" - "$token" "$ca_file" "$ca_dir" <<'PY'
 import json
+import ssl
 import sys
 import urllib.request
 
 token = sys.argv[1]
+ca_file = sys.argv[2] or None
+ca_dir = sys.argv[3] or None
 url = f"https://api.telegram.org/bot{token}/getUpdates"
+context = ssl.create_default_context(cafile=ca_file, capath=ca_dir)
 try:
-    with urllib.request.urlopen(url, timeout=20) as response:
+    with urllib.request.urlopen(url, timeout=20, context=context) as response:
         payload = json.load(response)
 except Exception:
     raise SystemExit(0)
@@ -463,7 +508,10 @@ write_env_file() {
   local cookies_file="$APP_DIR/data/instagram.cookies.txt"
   local openssl_prefix="$RUNTIME_DIR/openssl-3.0"
   local openssl_libdir
+  local ca_file ca_dir
   openssl_libdir="$(openssl_lib_dir "$openssl_prefix")"
+  ca_file="$(system_ca_bundle_file || true)"
+  ca_dir="$(system_ca_bundle_dir || true)"
   mkdir -p "$APP_DIR/data" "$APP_DIR/logs" "$APP_DIR/data/tmp"
   cat > "$ENV_FILE" <<EOF
 TELEGRAM_BOT_TOKEN=$bot_token
@@ -481,6 +529,10 @@ INSTAGRAM_COOKIES_FILE=$cookies_file
 OPENSSL_DIR=$openssl_prefix
 OPENSSL_LIB_DIR=$openssl_libdir
 LD_LIBRARY_PATH=$openssl_libdir
+SSL_CERT_FILE=$ca_file
+SSL_CERT_DIR=$ca_dir
+REQUESTS_CA_BUNDLE=$ca_file
+CURL_CA_BUNDLE=$ca_file
 
 INSTALOADER_BINARY=$VENV_DIR/bin/instaloader
 GALLERY_DL_BINARY=$VENV_DIR/bin/gallery-dl
@@ -611,6 +663,8 @@ WorkingDirectory=$APP_DIR
 Environment=PYTHONUNBUFFERED=1
 Environment=PATH=$VENV_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=LD_LIBRARY_PATH=$(openssl_lib_dir "$RUNTIME_DIR/openssl-3.0")
+Environment=SSL_CERT_FILE=$(system_ca_bundle_file || true)
+Environment=SSL_CERT_DIR=$(system_ca_bundle_dir || true)
 EnvironmentFile=$ENV_FILE
 ExecStart=$VENV_DIR/bin/python -m app.main
 Restart=always
