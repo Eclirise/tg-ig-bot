@@ -6,6 +6,17 @@ log() { echo "[bootstrap] $*"; }
 warn() { echo "[bootstrap][WARN] $*" >&2; }
 die() { echo "[bootstrap][ERROR] $*" >&2; exit 1; }
 
+usage() {
+  cat <<'EOF'
+Usage:
+  bash bootstrap_telegram_ig_bot_centos7.sh --repo-url <git_url> [--branch main] [--install-dir /opt/tg-ig-bot]
+
+Examples:
+  curl -fsSL https://raw.githubusercontent.com/Eclirise/tg-ig-bot/main/bootstrap_telegram_ig_bot_centos7.sh | \
+    bash -s -- --repo-url https://github.com/Eclirise/tg-ig-bot.git --branch main --install-dir /opt/tg-ig-bot
+EOF
+}
+
 if command -v sudo >/dev/null 2>&1 && [[ "$(id -u)" -ne 0 ]]; then
   SUDO="sudo"
 else
@@ -83,31 +94,86 @@ configure_firewall() {
   fi
 }
 
+prompt_value() {
+  local prompt="$1"
+  local default_value="${2:-}"
+  local result
+  if [[ -n "$default_value" ]]; then
+    read -r -p "$prompt [$default_value]: " result || true
+    echo "${result:-$default_value}"
+  else
+    read -r -p "$prompt: " result || true
+    echo "$result"
+  fi
+}
+
+parse_args() {
+  REPO_URL="${REPO_URL:-}"
+  BRANCH="${BRANCH:-main}"
+  INSTALL_DIR="${INSTALL_DIR:-/opt/tg-ig-bot}"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --repo-url)
+        [[ $# -ge 2 ]] || die '--repo-url 缺少参数。'
+        REPO_URL="$2"
+        shift 2
+        ;;
+      --branch)
+        [[ $# -ge 2 ]] || die '--branch 缺少参数。'
+        BRANCH="$2"
+        shift 2
+        ;;
+      --install-dir)
+        [[ $# -ge 2 ]] || die '--install-dir 缺少参数。'
+        INSTALL_DIR="$2"
+        shift 2
+        ;;
+      -h|--help|help)
+        usage
+        exit 0
+        ;;
+      *)
+        die "未知参数：$1"
+        ;;
+    esac
+  done
+}
+
 main() {
+  parse_args "$@"
   prepare_centos7_repo
   run_root yum install -y git curl
   configure_firewall
 
-  local repo_url branch install_dir
-  read -r -p '请输入你的 GitHub 仓库克隆地址（HTTPS 或 SSH）: ' repo_url || true
-  [[ -n "$repo_url" ]] || die '仓库地址不能为空。'
-  read -r -p '请输入分支名 [main]: ' branch || true
-  branch="${branch:-main}"
-  read -r -p '请输入安装目录 [/opt/tg-ig-bot]: ' install_dir || true
-  install_dir="${install_dir:-/opt/tg-ig-bot}"
-
-  if [[ -d "$install_dir/.git" ]]; then
-    log '检测到已有仓库，准备更新。'
-    run_root git -C "$install_dir" fetch --all --tags --prune
-    run_root git -C "$install_dir" checkout "$branch"
-    run_root git -C "$install_dir" pull --ff-only origin "$branch"
-  else
-    run_root mkdir -p "$(dirname "$install_dir")"
-    run_root git clone --depth 1 --branch "$branch" "$repo_url" "$install_dir"
+  if [[ -z "$REPO_URL" ]]; then
+    if [[ -t 0 ]]; then
+      REPO_URL="$(prompt_value '请输入你的 GitHub 仓库克隆地址（HTTPS 或 SSH）')"
+    else
+      usage
+      die '通过管道执行脚本时，必须用 --repo-url 指定仓库地址。'
+    fi
   fi
 
-  [[ -f "$install_dir/telegram_ig_bot/scripts/oracle_centos7_manager.sh" ]] || die '仓库中未找到 telegram_ig_bot/scripts/oracle_centos7_manager.sh。'
-  bash "$install_dir/telegram_ig_bot/scripts/oracle_centos7_manager.sh" install --repo-url "$repo_url" --branch "$branch"
+  if [[ -t 0 ]]; then
+    BRANCH="$(prompt_value '请输入分支名' "$BRANCH")"
+    INSTALL_DIR="$(prompt_value '请输入安装目录' "$INSTALL_DIR")"
+  fi
+
+  [[ -n "$REPO_URL" ]] || die '仓库地址不能为空。'
+
+  if [[ -d "$INSTALL_DIR/.git" ]]; then
+    log '检测到已有仓库，准备更新。'
+    run_root git -C "$INSTALL_DIR" fetch --all --tags --prune
+    run_root git -C "$INSTALL_DIR" checkout "$BRANCH"
+    run_root git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH"
+  else
+    run_root mkdir -p "$(dirname "$INSTALL_DIR")"
+    run_root git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
+  fi
+
+  [[ -f "$INSTALL_DIR/telegram_ig_bot/scripts/oracle_centos7_manager.sh" ]] || die '仓库中未找到 telegram_ig_bot/scripts/oracle_centos7_manager.sh。'
+  bash "$INSTALL_DIR/telegram_ig_bot/scripts/oracle_centos7_manager.sh" install --repo-url "$REPO_URL" --branch "$BRANCH"
 }
 
 main "$@"
