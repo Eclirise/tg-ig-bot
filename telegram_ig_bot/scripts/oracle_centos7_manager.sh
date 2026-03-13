@@ -46,56 +46,18 @@ run_root() {
 }
 run_as_user() {
   local target_user="$1"
-
-    system_ca_bundle_file() {
-      local candidates=(
-        /etc/pki/tls/certs/ca-bundle.crt
-        /etc/ssl/certs/ca-certificates.crt
-        /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
-      )
-      local candidate
-      for candidate in "${candidates[@]}"; do
-        if [[ -f "$candidate" ]]; then
-          echo "$candidate"
-          return 0
-        fi
-      done
-      return 1
-    }
-
-    system_ca_bundle_dir() {
-      local candidates=(
-        /etc/pki/tls/certs
-        /etc/ssl/certs
-      )
-      local candidate
-      for candidate in "${candidates[@]}"; do
-        if [[ -d "$candidate" ]]; then
-          echo "$candidate"
-          return 0
-        fi
-      done
-      return 1
-    }
   shift
   if command -v sudo >/dev/null 2>&1; then
     log "sudo -u $target_user $*"
-      local ca_file ca_dir
-      ca_file="$(system_ca_bundle_file || true)"
-      ca_dir="$(system_ca_bundle_dir || true)"
-      SSL_CERT_FILE="$ca_file" SSL_CERT_DIR="$ca_dir" "$(python_bin)" - "$token" "$ca_file" "$ca_dir" <<'PY'
+    sudo -u "$target_user" "$@"
   else
-    import ssl
     local quoted
     quoted=$(printf ' %q' "$@")
     run_root su -s /bin/bash - "$target_user" -c "${quoted# }"
   fi
-    ca_file = sys.argv[2] or None
-    ca_dir = sys.argv[3] or None
 }
-    context = ssl.create_default_context(cafile=ca_file, capath=ca_dir)
 
-        with urllib.request.urlopen(url, timeout=20, context=context) as response:
+validate_install_location() {
   if [[ "$INSTALL_DIR" == /root/* && "$RUN_USER" != "root" ]]; then
     if [[ "$(id -u)" -eq 0 ]]; then
       warn "安装目录 $INSTALL_DIR 位于 /root 下，检测到继承的运行用户是 $RUN_USER。将改用 root 继续安装。"
@@ -435,15 +397,22 @@ prompt_secret() {
 
 verify_bot_token() {
   local token="$1"
-  "$(python_bin)" - "$token" <<'PY'
+  local ca_file ca_dir
+  ca_file="$(system_ca_bundle_file || true)"
+  ca_dir="$(system_ca_bundle_dir || true)"
+  SSL_CERT_FILE="$ca_file" SSL_CERT_DIR="$ca_dir" "$(python_bin)" - "$token" "$ca_file" "$ca_dir" <<'PY'
 import json
+import ssl
 import sys
 import urllib.request
 
 token = sys.argv[1]
+ca_file = sys.argv[2] or None
+ca_dir = sys.argv[3] or None
 url = f"https://api.telegram.org/bot{token}/getMe"
+context = ssl.create_default_context(cafile=ca_file, capath=ca_dir)
 try:
-    with urllib.request.urlopen(url, timeout=20) as response:
+    with urllib.request.urlopen(url, timeout=20, context=context) as response:
         payload = json.load(response)
 except Exception as exc:
     print(f"ERROR::{exc}")
@@ -457,6 +426,37 @@ PY
 
 normalize_input() {
   printf '%s' "$1" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+}
+
+system_ca_bundle_file() {
+  local candidates=(
+    /etc/pki/tls/certs/ca-bundle.crt
+    /etc/ssl/certs/ca-certificates.crt
+    /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+  )
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [[ -f "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+system_ca_bundle_dir() {
+  local candidates=(
+    /etc/pki/tls/certs
+    /etc/ssl/certs
+  )
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [[ -d "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
 }
 
 auto_detect_admin_id() {
