@@ -66,22 +66,22 @@ ADMIN_ONLY_TEXT = "该命令仅管理员可用。"
 
 def format_subscription_list(subscriptions: list[Subscription]) -> str:
     if not subscriptions:
-        return "??????????"
-    lines = ["?????"]
+        return "当前没有订阅。"
+    lines = ["订阅列表"]
     for subscription in subscriptions:
         status_text = {
-            "active": "??",
-            "inactive": "???",
-            "error": "??",
+            "active": "启用",
+            "inactive": "停用",
+            "error": "异常",
         }.get(subscription.status.value, subscription.status.value)
         lines.append(
             "\n".join(
                 [
-                    f"????{subscription.username}",
-                    f"IG???{'?' if subscription.ig_feed_enabled else '?'}",
-                    f"Story?{'?' if subscription.story_enabled else '?'}",
-                    f"???????{format_dt(subscription.last_checked_at)}",
-                    f"???{status_text}" + (f"?{subscription.last_error}?" if subscription.last_error else ""),
+                    f"账号：{subscription.username}",
+                    f"IG 动态：{'开' if subscription.ig_feed_enabled else '关'}",
+                    f"Story：{'开' if subscription.story_enabled else '关'}",
+                    f"上次检查：{format_dt(subscription.last_checked_at)}",
+                    f"状态：{status_text}" + (f"（{subscription.last_error}）" if subscription.last_error else ""),
                 ]
             )
         )
@@ -91,51 +91,51 @@ def format_subscription_list(subscriptions: list[Subscription]) -> str:
 def format_runtime_status(snapshot: RuntimeSnapshot, stats: DailyStatsSummary) -> str:
     return "\n".join(
         [
-            "????",
+            "运行状态",
             "",
-            f"?????{snapshot.poll_interval_minutes}??",
-            f"?????{snapshot.cleanup_policy}",
-            f"?????{snapshot.backend_order}",
-            f"?????????{snapshot.chat_subscription_count}",
-            f"???????{snapshot.global_subscription_count}",
+            f"当前轮询：{snapshot.poll_interval_minutes} 分钟",
+            f"清理策略：{snapshot.cleanup_policy}",
+            f"下载后端：{snapshot.backend_order}",
+            f"当前聊天订阅数：{snapshot.chat_subscription_count}",
+            f"全局订阅数：{snapshot.global_subscription_count}",
             "",
-            format_stats(stats, title="????"),
+            format_stats(stats, title="今日统计"),
         ]
     )
 
 
-def format_stats(stats: DailyStatsSummary, *, title: str = "????") -> str:
+def format_stats(stats: DailyStatsSummary, *, title: str = "统计信息") -> str:
     return "\n".join(
         [
             title,
-            f"???{stats.date_key}",
-            f"???????{stats.parse_requests_success}",
-            f"IG?????{stats.feed_bundles_sent}",
-            f"Story???{stats.story_bundles_sent}",
-            f"?????{stats.photos_sent}",
-            f"?????{stats.videos_sent}",
+            f"日期：{stats.date_key}",
+            f"解析成功：{stats.parse_requests_success}",
+            f"IG 动态发送数：{stats.feed_bundles_sent}",
+            f"Story 发送数：{stats.story_bundles_sent}",
+            f"图片发送数：{stats.photos_sent}",
+            f"视频发送数：{stats.videos_sent}",
         ]
     )
 
 
 def format_enabled_groups(groups: list[RuntimeGroup]) -> str:
     if not groups:
-        return "??????????"
-    lines = ["??????"]
+        return "当前没有启用的群组。"
+    lines = ["已启用群组"]
     for group in groups:
         lines.append(
-            f"{group.title or '????'} | chat_id={group.chat_id} | ????={format_dt(group.enabled_at)}"
+            f"{group.title or '未命名群组'} | chat_id={group.chat_id} | 启用时间={format_dt(group.enabled_at)}"
         )
     return "\n".join(lines)
 
 
 def format_known_groups(groups: list[RuntimeGroup]) -> str:
     if not groups:
-        return "???????????????????????????? /chatid?"
-    lines = ["???????"]
+        return "当前还没有记录到任何群组，请先在群里发送 /chatid。"
+    lines = ["已记录群组"]
     for group in groups:
-        status = "???" if group.is_enabled else "???"
+        status = "已启用" if group.is_enabled else "未启用"
         lines.append(
-            f"{group.title or '????'} | chat_id={group.chat_id} | ??={group.chat_type or '??'} | ??={status}"
+            f"{group.title or '未命名群组'} | chat_id={group.chat_id} | 类型={group.chat_type or '未知'} | 状态={status}"
         )
     return "\n".join(lines)

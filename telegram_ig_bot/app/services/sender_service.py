@@ -74,7 +74,7 @@ class SenderService:
             sent_ok = True
             return True
         except Exception:
-            logger.exception("Telegram ????: chat_id=%s source=%s", chat_id, result.source_url)
+            logger.exception("Telegram 发送失败: chat_id=%s source=%s", chat_id, result.source_url)
             return False
         finally:
             if (sent_ok and self.config.cleanup_after_send) or ((not sent_ok) and self.config.cleanup_on_failure):

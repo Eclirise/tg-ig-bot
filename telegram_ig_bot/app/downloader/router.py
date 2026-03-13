@@ -62,16 +62,16 @@ class DownloaderRouter:
                     )
                     result.backend_name = backend.name
                     result.temp_dir = temp_dir
-                    logger.info("????: backend=%s url=%s", backend.name, parsed_url.normalized_url)
+                    logger.info("下载成功: backend=%s url=%s", backend.name, parsed_url.normalized_url)
                     return result
                 except Exception as exc:
                     last_error = exc
                     cleanup_path(temp_dir)
                     if self.register_rate_limit_cooldown(str(exc), operation="download", backend_name=backend.name):
                         break
-                    logger.warning("???????????: backend=%s error=%s", backend.name, exc)
-        error_text = str(last_error) if last_error else "????"
-        raise DownloadError(f"??????????{error_text}")
+                    logger.warning("下载后端失败，准备切换: backend=%s error=%s", backend.name, exc)
+        error_text = str(last_error) if last_error else "未知错误"
+        raise DownloadError(f"所有下载后端均失败：{error_text}")
 
     async def fetch_updates(
         self,
@@ -94,7 +94,7 @@ class DownloaderRouter:
                     retry_exceptions=(ListingError, RuntimeError, OSError),
                 )
                 logger.info(
-                    "??????: backend=%s username=%s type=%s count=%s",
+                    "拉取更新成功: backend=%s username=%s type=%s count=%s",
                     backend.name,
                     username,
                     subscription_type.value,
@@ -110,20 +110,20 @@ class DownloaderRouter:
                 ):
                     break
                 logger.warning(
-                    "?????????????: backend=%s username=%s type=%s error=%s",
+                    "拉取更新失败，准备切换: backend=%s username=%s type=%s error=%s",
                     backend.name,
                     username,
                     subscription_type.value,
                     exc,
                 )
-        error_text = str(last_error) if last_error else "????"
-        raise ListingError(f"??????????{error_text}")
+        error_text = str(last_error) if last_error else "未知错误"
+        raise ListingError(f"所有更新拉取后端均失败：{error_text}")
 
     async def wait_for_rate_limit_cooldown(self) -> None:
         remaining = self.remaining_rate_limit_cooldown_seconds()
         if remaining <= 0:
             return
-        logger.warning("?????????? %.1f ????? Instagram", remaining)
+        logger.warning("当前处于限流冷却，%.1f 秒后再请求 Instagram", remaining)
         await asyncio.sleep(remaining)
 
     def remaining_rate_limit_cooldown_seconds(self) -> float:
@@ -141,7 +141,7 @@ class DownloaderRouter:
             time.monotonic() + delay_seconds,
         )
         logger.warning(
-            "??? Instagram ?????????: operation=%s backend=%s cooldown=%ss error=%s",
+            "触发 Instagram 限流冷却: operation=%s backend=%s cooldown=%ss error=%s",
             operation,
             backend_name,
             delay_seconds,

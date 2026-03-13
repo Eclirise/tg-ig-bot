@@ -24,26 +24,26 @@ class AccessService:
 
     def enable_group(self, chat_id: int, title: str | None, chat_type: str | None, actor_user_id: int) -> None:
         if not self.is_admin(actor_user_id):
-            raise PermissionError("????????????")
+            raise PermissionError("只有管理员可以执行这个操作。")
         self.db.set_chat_enabled(chat_id, title, chat_type, enabled=True, enabled_by=actor_user_id)
 
     def disable_group(self, chat_id: int, title: str | None, chat_type: str | None, actor_user_id: int) -> None:
         if not self.is_admin(actor_user_id):
-            raise PermissionError("????????????")
+            raise PermissionError("只有管理员可以执行这个操作。")
         self.db.set_chat_enabled(chat_id, title, chat_type, enabled=False, enabled_by=actor_user_id)
 
     def enable_known_group(self, chat_id: int, actor_user_id: int) -> None:
         if not self.is_admin(actor_user_id):
-            raise PermissionError("????????????")
+            raise PermissionError("只有管理员可以执行这个操作。")
         chat = self.db.get_chat(chat_id)
         if chat is None or (chat.chat_id >= 0 and chat.chat_type not in {"group", "supergroup"}):
-            raise ValueError("????????????????????????????? /chatid?")
+            raise ValueError("没有找到这个群组，请先把 bot 拉进群里发送 /chatid。")
         self.db.set_chat_enabled(chat_id, chat.title, chat.chat_type, enabled=True, enabled_by=actor_user_id)
 
     def disable_known_group(self, chat_id: int, actor_user_id: int) -> None:
         if not self.is_admin(actor_user_id):
-            raise PermissionError("????????????")
+            raise PermissionError("只有管理员可以执行这个操作。")
         chat = self.db.get_chat(chat_id)
         if chat is None or (chat.chat_id >= 0 and chat.chat_type not in {"group", "supergroup"}):
-            raise ValueError("???????????????????????????????")
+            raise ValueError("没有找到这个群组，无法停用。")
         self.db.set_chat_enabled(chat_id, chat.title, chat.chat_type, enabled=False, enabled_by=actor_user_id)

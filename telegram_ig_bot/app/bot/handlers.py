@@ -137,7 +137,7 @@ def build_router(context: HandlerContext) -> Router:
         await message.answer(texts.START_TEXT + help_tail, reply_markup=keyboards.main_menu_keyboard())
 
     @router.message(Command("help"))
-    @router.message(F.text == "??")
+    @router.message(F.text == "帮助")
     async def help_handler(message: Message) -> None:
         await remember_chat(message)
         if not await access_allowed(message):
@@ -166,7 +166,7 @@ def build_router(context: HandlerContext) -> Router:
         if not await access_allowed(message, admin_command=True):
             return
         await message.answer(
-            f"??????\nchat_id?{message.chat.id}\n???{message.chat.type}\n???{chat_title(message) or '???'}"
+            f"当前聊天信息\nchat_id: {message.chat.id}\n类型: {message.chat.type}\n标题: {chat_title(message) or '无标题'}"
         )
 
     @router.message(Command("stats"))
@@ -175,7 +175,7 @@ def build_router(context: HandlerContext) -> Router:
         if not await access_allowed(message, admin_command=True):
             return
         stats = context.stats_service.get_today_summary(chat_id=0)
-        await message.answer(texts.format_stats(stats, title="??????"), reply_markup=keyboards.main_menu_keyboard())
+        await message.answer(texts.format_stats(stats, title="全局统计"), reply_markup=keyboards.main_menu_keyboard())
 
     @router.message(Command("update_tools"))
     async def update_tools_handler(message: Message) -> None:
@@ -215,11 +215,11 @@ def build_router(context: HandlerContext) -> Router:
         if not await access_allowed(message, admin_command=True):
             return
         if str(message.chat.type) != "private":
-            await message.answer("??????? /allowgroup <chat_id>?")
+            await message.answer("请在私聊中使用 /allowgroup <chat_id>。")
             return
         chat_id = parse_chat_id_arg(command)
         if chat_id is None:
-            await message.answer("???/allowgroup <chat_id>")
+            await message.answer("用法：/allowgroup <chat_id>")
             return
         try:
             context.access_service.enable_known_group(chat_id, message.from_user.id if message.from_user else 0)
@@ -228,7 +228,7 @@ def build_router(context: HandlerContext) -> Router:
             return
         context.subscription_service.reschedule_chat(chat_id, immediate=True)
         group = context.db.get_chat(chat_id)
-        await message.answer(f"?????{group.title or chat_id}?chat_id={chat_id}?")
+        await message.answer(f"已允许群组：{group.title or chat_id}，chat_id={chat_id}。")
 
     @router.message(Command("denygroup"))
     async def deny_group_handler(message: Message, command: CommandObject) -> None:
@@ -236,11 +236,11 @@ def build_router(context: HandlerContext) -> Router:
         if not await access_allowed(message, admin_command=True):
             return
         if str(message.chat.type) != "private":
-            await message.answer("??????? /denygroup <chat_id>?")
+            await message.answer("请在私聊中使用 /denygroup <chat_id>。")
             return
         chat_id = parse_chat_id_arg(command)
         if chat_id is None:
-            await message.answer("???/denygroup <chat_id>")
+            await message.answer("用法：/denygroup <chat_id>")
             return
         try:
             context.access_service.disable_known_group(chat_id, message.from_user.id if message.from_user else 0)
@@ -249,7 +249,7 @@ def build_router(context: HandlerContext) -> Router:
             return
         context.db.reschedule_chat_subscriptions(chat_id, None)
         group = context.db.get_chat(chat_id)
-        await message.answer(f"?????{(group.title if group else None) or chat_id}?chat_id={chat_id}?")
+        await message.answer(f"已禁止群组：{(group.title if group else None) or chat_id}，chat_id={chat_id}。")
 
     @router.message(Command("tg"))
     @router.message(Command("ig"))
@@ -259,7 +259,7 @@ def build_router(context: HandlerContext) -> Router:
             return
         url = resolve_url_from_message(message, command)
         if not url:
-            await message.answer("??????? Instagram ???????????????????? /ig?")
+            await message.answer("请发送 Instagram 链接，或者使用 /ig <链接>、/tg <链接>。")
             return
         await begin_parse(message, url)
 
@@ -269,7 +269,7 @@ def build_router(context: HandlerContext) -> Router:
         if not await access_allowed(message, admin_command=True):
             return
         if str(message.chat.type) == "private":
-            await message.answer("???????? /enable_here?????? /allowgroup <chat_id>?")
+            await message.answer("私聊里不能使用 /enable_here。请在目标群里发送，或在私聊使用 /allowgroup <chat_id>。")
             return
         context.access_service.enable_group(
             message.chat.id,
@@ -278,7 +278,7 @@ def build_router(context: HandlerContext) -> Router:
             message.from_user.id if message.from_user else 0,
         )
         context.subscription_service.reschedule_chat(message.chat.id, immediate=True)
-        await message.answer("??????????????? /ig?/tg ??????")
+        await message.answer("当前群已启用，可以直接使用 /ig 或 /tg。")
 
     @router.message(Command("disable_here"))
     async def disable_here_handler(message: Message) -> None:
@@ -286,7 +286,7 @@ def build_router(context: HandlerContext) -> Router:
         if not await access_allowed(message, admin_command=True):
             return
         if str(message.chat.type) == "private":
-            await message.answer("????????")
+            await message.answer("私聊里不能使用 /disable_here。")
             return
         context.access_service.disable_group(
             message.chat.id,
@@ -295,9 +295,9 @@ def build_router(context: HandlerContext) -> Router:
             message.from_user.id if message.from_user else 0,
         )
         context.db.reschedule_chat_subscriptions(message.chat.id, None)
-        await message.answer("???????????????????????????")
+        await message.answer("当前群已停用，现有订阅也已暂停。")
 
-    @router.message(F.text == "????")
+    @router.message(F.text == "解析链接")
     async def parse_menu_handler(message: Message, state: FSMContext) -> None:
         if not await access_allowed(message):
             return
@@ -308,36 +308,36 @@ def build_router(context: HandlerContext) -> Router:
     async def parse_waiting_handler(message: Message, state: FSMContext) -> None:
         if not await access_allowed(message):
             return
-        if message.text == "?????":
+        if message.text == "返回主菜单":
             await state.clear()
             await message.answer(texts.START_TEXT, reply_markup=keyboards.main_menu_keyboard())
             return
         url = resolve_url_from_message(message)
         if not url:
-            await message.answer("????? Instagram ?????????")
+            await message.answer("请发送有效的 Instagram 链接。")
             return
         await state.clear()
         await begin_parse(message, url)
 
-    @router.message(F.text == "????")
+    @router.message(F.text == "订阅管理")
     async def subscription_menu_handler(message: Message, state: FSMContext) -> None:
         if not await access_allowed(message):
             return
         await state.clear()
         await message.answer(texts.SUBSCRIPTION_MENU_TEXT, reply_markup=keyboards.subscription_menu_keyboard())
 
-    @router.message(F.text == "????")
+    @router.message(F.text == "新增订阅")
     async def add_subscription_handler(message: Message, state: FSMContext) -> None:
         if not await access_allowed(message):
             return
         await state.set_state(InteractionState.waiting_add_username)
-        await message.answer("??? Instagram ????", reply_markup=keyboards.subscription_menu_keyboard())
+        await message.answer("请输入 Instagram 用户名", reply_markup=keyboards.subscription_menu_keyboard())
 
     @router.message(InteractionState.waiting_add_username)
     async def add_subscription_username_handler(message: Message, state: FSMContext) -> None:
         if not await access_allowed(message):
             return
-        if message.text == "?????":
+        if message.text == "返回主菜单":
             await state.clear()
             await message.answer(texts.START_TEXT, reply_markup=keyboards.main_menu_keyboard())
             return
@@ -347,7 +347,7 @@ def build_router(context: HandlerContext) -> Router:
             await message.answer(str(exc))
             return
         await state.update_data(subscription_username=username)
-        await message.answer("????????", reply_markup=keyboards.add_subscription_mode_keyboard())
+        await message.answer("请选择订阅模式", reply_markup=keyboards.add_subscription_mode_keyboard())
 
     @router.callback_query(F.data.startswith("subadd:"))
     async def add_subscription_callback(query: CallbackQuery, state: FSMContext) -> None:
@@ -356,40 +356,40 @@ def build_router(context: HandlerContext) -> Router:
         action = (query.data or "").split(":", 1)[1]
         if action == "cancel":
             await state.clear()
-            await query.message.edit_text("????????")
+            await query.message.edit_text("已取消。")
             await query.answer()
             return
         data = await state.get_data()
         username = data.get("subscription_username")
         if not username:
-            await query.answer("???????????????", show_alert=True)
+            await query.answer("缺少订阅用户名，请重新操作。", show_alert=True)
             return
         subscription = context.subscription_service.add_subscription(query.message.chat.id, username, action)
         await state.clear()
         await query.message.edit_text(
-            f"??????{subscription.username}\nIG???{'?' if subscription.ig_feed_enabled else '?'}\nStory?{'?' if subscription.story_enabled else '?'}"
+            f"已订阅：{subscription.username}\nIG 动态：{'开' if subscription.ig_feed_enabled else '关'}\nStory：{'开' if subscription.story_enabled else '关'}"
         )
-        await query.answer("???")
+        await query.answer("已保存")
 
-    @router.message(F.text == "????")
+    @router.message(F.text == "查看订阅")
     async def view_subscriptions_handler(message: Message) -> None:
         if not await access_allowed(message):
             return
         subscriptions = context.subscription_service.list_subscriptions(message.chat.id)
         await message.answer(texts.format_subscription_list(subscriptions), reply_markup=keyboards.subscription_menu_keyboard())
 
-    @router.message(F.text == "????")
+    @router.message(F.text == "修改订阅")
     async def modify_subscription_handler(message: Message, state: FSMContext) -> None:
         if not await access_allowed(message):
             return
         await state.set_state(InteractionState.waiting_modify_username)
-        await message.answer("??????? Instagram ????", reply_markup=keyboards.subscription_menu_keyboard())
+        await message.answer("请输入要修改的 Instagram 用户名", reply_markup=keyboards.subscription_menu_keyboard())
 
     @router.message(InteractionState.waiting_modify_username)
     async def modify_subscription_username_handler(message: Message, state: FSMContext) -> None:
         if not await access_allowed(message):
             return
-        if message.text == "?????":
+        if message.text == "返回主菜单":
             await state.clear()
             await message.answer(texts.START_TEXT, reply_markup=keyboards.main_menu_keyboard())
             return
@@ -400,10 +400,10 @@ def build_router(context: HandlerContext) -> Router:
             return
         subscription = context.subscription_service.get_subscription(message.chat.id, username)
         if subscription is None:
-            await message.answer("?????????")
+            await message.answer("未找到这个订阅。")
             return
         await state.update_data(subscription_username=username)
-        await message.answer("????????", reply_markup=keyboards.modify_subscription_keyboard())
+        await message.answer("请选择新的订阅模式", reply_markup=keyboards.modify_subscription_keyboard())
 
     @router.callback_query(F.data.startswith("submod:"))
     async def modify_subscription_callback(query: CallbackQuery, state: FSMContext) -> None:
@@ -412,13 +412,13 @@ def build_router(context: HandlerContext) -> Router:
         action = (query.data or "").split(":", 1)[1]
         if action == "back":
             await state.clear()
-            await query.message.edit_text("????")
+            await query.message.edit_text("已返回。")
             await query.answer()
             return
         data = await state.get_data()
         username = data.get("subscription_username")
         if not username:
-            await query.answer("???????????????", show_alert=True)
+            await query.answer("缺少订阅用户名，请重新操作。", show_alert=True)
             return
         try:
             subscription = context.subscription_service.modify_subscription(query.message.chat.id, username, action)
@@ -427,22 +427,22 @@ def build_router(context: HandlerContext) -> Router:
             return
         await state.clear()
         await query.message.edit_text(
-            f"??????{subscription.username}\nIG???{'?' if subscription.ig_feed_enabled else '?'}\nStory?{'?' if subscription.story_enabled else '?'}"
+            f"已更新订阅：{subscription.username}\nIG 动态：{'开' if subscription.ig_feed_enabled else '关'}\nStory：{'开' if subscription.story_enabled else '关'}"
         )
-        await query.answer("???")
+        await query.answer("已保存")
 
-    @router.message(F.text == "??")
+    @router.message(F.text == "退订")
     async def unsubscribe_handler(message: Message, state: FSMContext) -> None:
         if not await access_allowed(message):
             return
         await state.set_state(InteractionState.waiting_unsubscribe_username)
-        await message.answer("????????? Instagram ????", reply_markup=keyboards.subscription_menu_keyboard())
+        await message.answer("请输入要退订的 Instagram 用户名", reply_markup=keyboards.subscription_menu_keyboard())
 
     @router.message(InteractionState.waiting_unsubscribe_username)
     async def unsubscribe_username_handler(message: Message, state: FSMContext) -> None:
         if not await access_allowed(message):
             return
-        if message.text == "?????":
+        if message.text == "返回主菜单":
             await state.clear()
             await message.answer(texts.START_TEXT, reply_markup=keyboards.main_menu_keyboard())
             return
@@ -452,22 +452,22 @@ def build_router(context: HandlerContext) -> Router:
             await message.answer(str(exc))
             return
         await state.clear()
-        await message.answer(f"??????{subscription.username}", reply_markup=keyboards.subscription_menu_keyboard())
+        await message.answer(f"已退订：{subscription.username}", reply_markup=keyboards.subscription_menu_keyboard())
 
-    @router.message(F.text == "??")
+    @router.message(F.text == "设置")
     async def settings_menu_handler(message: Message, state: FSMContext) -> None:
         if not await access_allowed(message):
             return
         await state.clear()
         await message.answer(texts.SETTINGS_MENU_TEXT, reply_markup=keyboards.settings_menu_keyboard())
 
-    @router.message(F.text == "????")
+    @router.message(F.text == "轮询频率")
     async def poll_frequency_handler(message: Message) -> None:
         if not await access_allowed(message):
             return
         current = context.settings_service.get_poll_interval_minutes(message.chat.id)
         await message.answer(
-            f"???????{current}???",
+            f"当前轮询频率：{current} 分钟",
             reply_markup=keyboards.poll_interval_keyboard(current),
         )
 
@@ -477,25 +477,25 @@ def build_router(context: HandlerContext) -> Router:
             return
         action = (query.data or "").split(":", 1)[1]
         if action == "back":
-            await query.message.edit_text("????????")
+            await query.message.edit_text("已返回设置菜单。")
             await query.answer()
             return
         minutes = int(action)
         context.settings_service.set_poll_interval_minutes(query.message.chat.id, minutes)
         context.subscription_service.reschedule_chat(query.message.chat.id, immediate=False)
-        await query.message.edit_text(f"???????? {minutes} ???")
-        await query.answer("???")
+        await query.message.edit_text(f"轮询频率已设置为 {minutes} 分钟")
+        await query.answer("已保存")
 
-    @router.message(F.text == "??????")
+    @router.message(F.text == "临时文件策略")
     async def cleanup_policy_handler(message: Message) -> None:
         if not await access_allowed(message):
             return
         await message.answer(
-            f"?????{context.settings_service.cleanup_policy_text()}",
+            f"临时文件策略：{context.settings_service.cleanup_policy_text()}",
             reply_markup=keyboards.settings_menu_keyboard(),
         )
 
-    @router.message(F.text == "????")
+    @router.message(F.text == "运行状态")
     async def runtime_status_handler(message: Message) -> None:
         if not await access_allowed(message):
             return
@@ -503,7 +503,7 @@ def build_router(context: HandlerContext) -> Router:
         stats = context.stats_service.get_today_summary(chat_id=message.chat.id)
         await message.answer(texts.format_runtime_status(snapshot, stats), reply_markup=keyboards.settings_menu_keyboard())
 
-    @router.message(F.text == "?????")
+    @router.message(F.text == "返回主菜单")
     async def back_to_main_handler(message: Message, state: FSMContext) -> None:
         if not await access_allowed(message):
             return
