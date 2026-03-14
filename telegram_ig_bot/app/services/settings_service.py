@@ -11,6 +11,7 @@ class RuntimeSnapshot:
     poll_interval_minutes: int
     cleanup_policy: str
     backend_order: str
+    access_request_alerts_enabled: bool
     chat_subscription_count: int
     global_subscription_count: int
 
@@ -18,6 +19,7 @@ class RuntimeSnapshot:
 class SettingsService:
     POLL_INTERVAL_KEY = "poll_interval_minutes"
     ADMIN_TARGET_CHAT_KEY = "admin_target_chat_id"
+    ACCESS_REQUEST_ALERTS_KEY = "access_request_alerts_enabled"
     ALLOWED_INTERVALS = (5, 10)
 
     def __init__(self, db: Database, config: AppConfig) -> None:
@@ -59,6 +61,20 @@ class SettingsService:
     def clear_admin_target_chat_id(self, admin_chat_id: int) -> None:
         self.db.set_setting(admin_chat_id, self.ADMIN_TARGET_CHAT_KEY, "")
 
+    def access_request_alerts_enabled(self) -> bool:
+        value = self.db.get_setting(self.config.admin_tg_user_id, self.ACCESS_REQUEST_ALERTS_KEY)
+        if value is None or value == "":
+            return True
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+
+    def set_access_request_alerts_enabled(self, enabled: bool) -> bool:
+        self.db.set_setting(
+            self.config.admin_tg_user_id,
+            self.ACCESS_REQUEST_ALERTS_KEY,
+            "true" if enabled else "false",
+        )
+        return enabled
+
     def cleanup_policy_text(self) -> str:
         if self.config.cleanup_after_send:
             return "发送成功后立即删除，失败任务也不保留长期缓存。"
@@ -72,6 +88,7 @@ class SettingsService:
             poll_interval_minutes=self.get_poll_interval_minutes(chat_id),
             cleanup_policy=self.cleanup_policy_text(),
             backend_order=self.backend_order_text(),
+            access_request_alerts_enabled=self.access_request_alerts_enabled(),
             chat_subscription_count=self.db.count_active_subscriptions(chat_id=chat_id),
             global_subscription_count=self.db.count_active_subscriptions(),
         )

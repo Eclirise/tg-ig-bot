@@ -75,6 +75,7 @@ class DownloaderRouter:
                         base_delay=1.0,
                         retry_exceptions=(DownloadError, OSError, RuntimeError),
                     )
+                    self._validate_download_result(result, backend_name=backend.name)
                     result.backend_name = backend.name
                     result.temp_dir = temp_dir
                     logger.info(
@@ -168,3 +169,17 @@ class DownloaderRouter:
             error_text[:200],
         )
         return True
+
+    @staticmethod
+    def _validate_download_result(result: DownloadResult, *, backend_name: str) -> None:
+        if not result.items:
+            raise DownloadError(f"{backend_name} 返回了空下载结果。")
+        for item in result.items:
+            if not item.local_path.exists() or not item.local_path.is_file():
+                raise DownloadError(
+                    f"{backend_name} 返回了不存在的媒体文件：{item.local_path}"
+                )
+            if item.local_path.stat().st_size <= 0:
+                raise DownloadError(
+                    f"{backend_name} 返回了空媒体文件：{item.local_path}"
+                )

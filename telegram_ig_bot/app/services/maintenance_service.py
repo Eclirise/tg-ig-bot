@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import logging
+import os
 from pathlib import Path
 from shutil import which
 
@@ -37,6 +39,7 @@ class ToolUpdateResult:
 class MaintenanceService:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
+        self.logger = logging.getLogger(__name__)
 
     @property
     def script_path(self) -> Path:
@@ -66,3 +69,8 @@ class MaintenanceService:
         if process.returncode != 0:
             raise RuntimeError(result.render_error())
         return result
+
+    async def restart_application(self, *, delay_seconds: float = 2.0) -> None:
+        await asyncio.sleep(max(0.2, delay_seconds))
+        self.logger.warning("收到管理员重启指令，进程即将退出，等待 systemd 自动拉起。")
+        os._exit(0)

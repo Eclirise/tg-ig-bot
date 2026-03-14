@@ -11,7 +11,10 @@ def _env_int(name: str, default: int) -> int:
     value = os.getenv(name)
     if not value:
         return default
-    return int(value)
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} 必须是整数，当前值为 {value!r}。") from exc
 
 
 def _env_path(name: str) -> Path | None:
@@ -75,7 +78,10 @@ class AppConfig:
 
 def load_config() -> AppConfig:
     project_dir = Path(__file__).resolve().parents[1]
-    load_dotenv(project_dir / ".env")
+    env_file = project_dir / ".env"
+    if env_file.exists() and not os.access(env_file, os.R_OK):
+        raise RuntimeError(f"配置文件不可读：{env_file}")
+    load_dotenv(env_file)
 
     data_dir = _env_path("DATA_DIR") or project_dir / "data"
     logs_dir = _env_path("LOGS_DIR") or project_dir / "logs"

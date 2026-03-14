@@ -31,7 +31,13 @@ class InstaloaderBackend(DownloaderBackend):
         parsed_url: ParsedMediaUrl,
         temp_dir: Path,
     ) -> DownloadResult:
-        return await asyncio.to_thread(self._download_url_sync, url, parsed_url, temp_dir)
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(self._download_url_sync, url, parsed_url, temp_dir),
+                timeout=self.config.download_timeout_seconds,
+            )
+        except asyncio.TimeoutError as exc:
+            raise DownloadError(f"Instaloader 下载超时（>{self.config.download_timeout_seconds}s）。") from exc
 
     async def fetch_updates(
         self,
@@ -41,13 +47,19 @@ class InstaloaderBackend(DownloaderBackend):
         *,
         limit: int,
     ) -> list[RemoteMediaRef]:
-        return await asyncio.to_thread(
-            self._fetch_updates_sync,
-            username,
-            subscription_type,
-            checkpoint,
-            limit,
-        )
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(
+                    self._fetch_updates_sync,
+                    username,
+                    subscription_type,
+                    checkpoint,
+                    limit,
+                ),
+                timeout=self.config.download_timeout_seconds,
+            )
+        except asyncio.TimeoutError as exc:
+            raise ListingError(f"Instaloader 拉取更新超时（>{self.config.download_timeout_seconds}s）。") from exc
 
     def _download_url_sync(self, url: str, parsed_url: ParsedMediaUrl, temp_dir: Path) -> DownloadResult:
         try:

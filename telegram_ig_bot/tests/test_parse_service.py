@@ -80,14 +80,15 @@ async def test_parse_service_replaces_progress_and_clears_on_success(tmp_path: P
     bot = StubBot()
     sender = StubSenderService()
     stats = StubStatsService()
-    service = ParseService(StubRouter(result), sender, stats)
+    service = ParseService(StubRouter(result), sender, stats, max_concurrent_jobs=1)
 
     await service.parse_and_send(bot, 123, result.source_url, progress_message_id=10)
 
     assert bot.deleted_ids[0] == 10
-    assert "正在下载 Instagram 内容" in bot.sent_texts[0]
-    assert "下载完成，正在发送视频" in bot.sent_texts[1]
-    assert "正在发送视频" in bot.sent_texts[2]
+    assert "开始解析 Instagram 内容" in bot.sent_texts[0]
+    assert "正在下载 Instagram 内容" in bot.sent_texts[1]
+    assert "下载完成，正在发送视频" in bot.sent_texts[2]
+    assert "正在发送视频" in bot.sent_texts[3]
     assert bot.deleted_ids[-1] > 10
     assert stats.calls == 1
 
@@ -116,9 +117,10 @@ async def test_parse_service_reports_youtube_download_progress(tmp_path: Path) -
     bot = StubBot()
     sender = StubSenderService()
     stats = StubStatsService()
-    service = ParseService(StubRouter(result), sender, stats)
+    service = ParseService(StubRouter(result), sender, stats, max_concurrent_jobs=1)
 
     await service.parse_and_send(bot, 123, result.source_url)
 
-    assert "正在下载 YouTube 内容" in bot.sent_texts[0]
+    assert "开始解析 YouTube 内容" in bot.sent_texts[0]
+    assert "正在下载 YouTube 内容" in bot.sent_texts[1]
     assert stats.calls == 1

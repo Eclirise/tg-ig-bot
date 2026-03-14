@@ -25,11 +25,45 @@ class StubBackend(DownloaderBackend):
         self.supports_listing = True
         self.download_calls = 0
         self.fetch_calls = 0
+        self.return_empty_result = False
+        self.return_missing_file = False
 
     async def download_url(self, url: str, parsed_url, temp_dir: Path) -> DownloadResult:
         self.download_calls += 1
         if self.download_error is not None:
             raise self.download_error
+        if self.return_empty_result:
+            return DownloadResult(
+                media_id=self.name,
+                shortcode="abc",
+                username="example",
+                caption=None,
+                source_url=url,
+                created_at=None,
+                items=[],
+            )
+        if self.return_missing_file:
+            path = temp_dir / "missing.jpg"
+            return DownloadResult(
+                media_id=self.name,
+                shortcode="abc",
+                username="example",
+                caption=None,
+                source_url=url,
+                created_at=None,
+                items=[
+                    MediaItem(
+                        media_id=self.name,
+                        shortcode="abc",
+                        media_type=MediaType.IMAGE,
+                        local_path=path,
+                        caption=None,
+                        source_url=url,
+                        username="example",
+                        created_at=None,
+                    )
+                ],
+            )
         path = temp_dir / f"{self.name}.jpg"
         return DownloadResult(
             media_id=self.name,
@@ -131,3 +165,25 @@ async def test_router_youtube_download_uses_ytdlp_only(tmp_path, monkeypatch) ->
     assert first.download_calls == 0
     assert second.download_calls == 0
     assert third.download_calls == 1
+
+
+@pytest.mark.asyncio()
+async def test_router_rejects_empty_download_result(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(router_module, "async_retry", single_try)
+    backend = StubBackend("instaloader")
+    backend.return_empty_result = True
+    router = DownloaderRouter([backend], temp_root=tmp_path, max_concurrent_downloads=1)
+
+    with pytest.raises(DownloadError, match="空下载结果"):
+        await router.download("https://www.instagram.com/p/abc/")
+
+
+@pytest.mark.asyncio()
+async def test_router_rejects_missing_downloaded_file(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(router_module, "async_retry", single_try)
+    backend = StubBackend("instaloader")
+    backend.return_missing_file = True
+    router = DownloaderRouter([backend], temp_root=tmp_path, max_concurrent_downloads=1)
+
+    with pytest.raises(DownloadError, match="不存在的媒体文件"):
+        await router.download("https://www.instagram.com/p/abc/")

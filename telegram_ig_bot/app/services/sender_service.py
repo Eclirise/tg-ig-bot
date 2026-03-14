@@ -7,6 +7,7 @@ from aiogram import Bot
 from aiogram.types import FSInputFile, InputMediaPhoto, InputMediaVideo
 
 from app.config import AppConfig
+from app.downloader.base import DownloadError
 from app.downloader.types import DownloadResult, MediaItem
 from app.models import MediaType
 from app.services.cleanup_service import CleanupService
@@ -31,6 +32,7 @@ class SenderService:
     ) -> bool:
         sent_ok = False
         try:
+            self._validate_download_result(result)
             if len(result.items) == 1:
                 await self._send_single(
                     bot,
@@ -121,6 +123,16 @@ class SenderService:
         if not caption:
             return None
         return caption[:1024]
+
+    @staticmethod
+    def _validate_download_result(result: DownloadResult) -> None:
+        if not result.items:
+            raise DownloadError("下载结果为空，没有可发送的媒体文件。")
+        for item in result.items:
+            if not item.local_path.exists() or not item.local_path.is_file():
+                raise DownloadError(f"待发送文件不存在：{item.local_path}")
+            if item.local_path.stat().st_size <= 0:
+                raise DownloadError(f"待发送文件为空：{item.local_path}")
 
     @staticmethod
     def _chunks(items: list[MediaItem], size: int) -> list[list[MediaItem]]:

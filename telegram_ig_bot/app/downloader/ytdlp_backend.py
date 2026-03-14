@@ -41,7 +41,19 @@ class YtDlpBackend(DownloaderBackend):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await process.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=self.config.download_timeout_seconds,
+            )
+        except asyncio.TimeoutError as exc:
+            process.kill()
+            stdout, stderr = await process.communicate()
+            detail = stderr.decode("utf-8", errors="ignore").strip() or stdout.decode("utf-8", errors="ignore").strip()
+            raise DownloadError(
+                f"yt-dlp 下载超时（>{self.config.download_timeout_seconds}s）。"
+                + (f" {detail[:180]}" if detail else "")
+            ) from exc
         if process.returncode != 0:
             detail = stderr.decode("utf-8", errors="ignore").strip() or stdout.decode("utf-8", errors="ignore").strip()
             raise DownloadError(detail or f"yt-dlp 退出码 {process.returncode}")

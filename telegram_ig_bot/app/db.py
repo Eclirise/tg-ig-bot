@@ -106,9 +106,13 @@ class Database:
         with self._lock, self._connect() as conn:
             conn.executescript(SCHEMA_SQL)
 
-    def ensure_chat(self, chat_id: int, title: str | None, chat_type: str | None) -> None:
+    def ensure_chat(self, chat_id: int, title: str | None, chat_type: str | None) -> bool:
         now = to_iso(utcnow())
         with self._lock, self._connect() as conn:
+            existing = conn.execute(
+                "SELECT 1 FROM chats WHERE chat_id = ?",
+                (chat_id,),
+            ).fetchone()
             conn.execute(
                 """
                 INSERT OR IGNORE INTO chats(chat_id, title, type, created_at, updated_at)
@@ -126,6 +130,7 @@ class Database:
                 """,
                 (title, chat_type, now, chat_id),
             )
+        return existing is None
 
     def set_chat_enabled(
         self,
@@ -342,7 +347,7 @@ class Database:
                 (status.value, last_checked_at, next_check_at, last_error, now, chat_id, username),
             )
 
-    def reschedule_chat_subscriptions(self, chat_id: int, next_check_at: str) -> None:
+    def reschedule_chat_subscriptions(self, chat_id: int, next_check_at: str | None) -> None:
         now = to_iso(utcnow())
         with self._lock, self._connect() as conn:
             conn.execute(

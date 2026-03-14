@@ -50,7 +50,12 @@ async def main() -> None:
         rate_limit_cooldown_min_seconds=config.ig_rate_limit_cooldown_min_seconds,
         rate_limit_cooldown_max_seconds=config.ig_rate_limit_cooldown_max_seconds,
     )
-    parse_service = ParseService(router, sender_service, stats_service)
+    parse_service = ParseService(
+        router,
+        sender_service,
+        stats_service,
+        max_concurrent_jobs=config.max_concurrent_downloads,
+    )
     subscription_service = SubscriptionService(
         db,
         settings_service,
@@ -69,13 +74,12 @@ async def main() -> None:
         [
             BotCommand(command="start", description="开始使用机器人"),
             BotCommand(command="commands", description="查看命令列表"),
-            BotCommand(command="ig", description="解析 Instagram 链接"),
-            BotCommand(command="tg", description="解析 Instagram 链接"),
-            BotCommand(command="yt", description="解析 YouTube 链接"),
+            BotCommand(command="ig", description="也可直接发送链接解析"),
             BotCommand(command="subs", description="查看当前聊天订阅"),
             BotCommand(command="subadd", description="新增订阅"),
             BotCommand(command="submod", description="修改订阅"),
             BotCommand(command="unsubscribe", description="退订"),
+            BotCommand(command="status", description="查看运行状态"),
             BotCommand(command="help", description="查看帮助"),
             BotCommand(command="chatid", description="管理员查看当前聊天 ID"),
             BotCommand(command="enable_here", description="管理员在当前群启用机器人"),
@@ -91,6 +95,8 @@ async def main() -> None:
             BotCommand(command="cleartarget", description="管理员清除订阅管理目标"),
             BotCommand(command="listgroups", description="管理员查看已启用群组"),
             BotCommand(command="stats", description="管理员查看今日统计"),
+            BotCommand(command="accessalerts", description="管理员切换审核通知"),
+            BotCommand(command="restart", description="管理员重启机器人"),
             BotCommand(command="update_tools", description="管理员更新下载工具并自检"),
         ]
     )

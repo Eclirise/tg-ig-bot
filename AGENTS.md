@@ -15,6 +15,7 @@ A low-resource Telegram bot for downloading Instagram media and polling subscrib
 
 ## Preferred stack
 
+
 - Python 3.11+
 - aiogram 3.x
 - Instaloader primary

@@ -1,14 +1,17 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+
+from app.bot import texts
 
 
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="解析链接"), KeyboardButton(text="订阅管理")],
-            [KeyboardButton(text="设置"), KeyboardButton(text="帮助")],
-            [KeyboardButton(text="命令列表")],
+            [KeyboardButton(text="解析链接"), KeyboardButton(text="查看订阅")],
+            [KeyboardButton(text="新增订阅"), KeyboardButton(text="运行状态")],
+            [KeyboardButton(text="帮助"), KeyboardButton(text="命令列表")],
+            [KeyboardButton(text="设置")],
         ],
         resize_keyboard=True,
     )
@@ -17,9 +20,9 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
 def subscription_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="新增订阅"), KeyboardButton(text="查看订阅")],
+            [KeyboardButton(text="查看订阅"), KeyboardButton(text="新增订阅")],
             [KeyboardButton(text="修改订阅"), KeyboardButton(text="退订")],
-            [KeyboardButton(text="返回主菜单")],
+            [KeyboardButton(text=texts.CANCEL_ACTION_TEXT)],
         ],
         resize_keyboard=True,
     )
@@ -28,9 +31,9 @@ def subscription_menu_keyboard() -> ReplyKeyboardMarkup:
 def settings_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="轮询频率"), KeyboardButton(text="临时文件策略")],
+            [KeyboardButton(text="轮询频率"), KeyboardButton(text="审核通知")],
             [KeyboardButton(text="运行状态")],
-            [KeyboardButton(text="返回主菜单")],
+            [KeyboardButton(text=texts.CANCEL_ACTION_TEXT)],
         ],
         resize_keyboard=True,
     )
@@ -75,5 +78,33 @@ def poll_interval_keyboard(current_minutes: int) -> InlineKeyboardMarkup:
                 ),
             ],
             [InlineKeyboardButton(text="返回", callback_data="poll:back")],
+        ]
+    )
+
+
+def access_request_keyboard(kind: str, chat_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="允许", callback_data=f"review:{kind}:allow:{chat_id}"),
+                InlineKeyboardButton(text="拒绝", callback_data=f"review:{kind}:deny:{chat_id}"),
+            ]
+        ]
+    )
+
+
+def access_alerts_keyboard(enabled: bool) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"开启{' ✓' if enabled else ''}",
+                    callback_data="accessalerts:on",
+                ),
+                InlineKeyboardButton(
+                    text=f"关闭{' ✓' if not enabled else ''}",
+                    callback_data="accessalerts:off",
+                ),
+            ]
         ]
     )

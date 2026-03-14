@@ -36,7 +36,7 @@ class GalleryDLBackend(DownloaderBackend):
         if self.config.instagram_cookies_file and self.config.instagram_cookies_file.exists():
             args.extend(["--cookies", str(self.config.instagram_cookies_file)])
         args.append(url)
-        stdout, stderr = await self._run_command(args)
+        stdout, stderr = await self._run_command(args, operation="download")
         files = self._collect_media_files(temp_dir)
         if not files:
             detail = stderr.strip() or stdout.strip() or "gallery-dl 未产生任何媒体文件。"
@@ -88,7 +88,7 @@ class GalleryDLBackend(DownloaderBackend):
             args.extend(["--cookies", str(self.config.instagram_cookies_file)])
         args.append(target_url)
         try:
-            stdout, stderr = await self._run_command(args)
+            stdout, stderr = await self._run_command(args, operation="listing")
         except DownloadError as exc:
             raise ListingError(str(exc)) from exc
         refs: list[RemoteMediaRef] = []
@@ -128,13 +128,27 @@ class GalleryDLBackend(DownloaderBackend):
         refs.sort(key=lambda item: (item.created_at or datetime.min.replace(tzinfo=timezone.utc), item.dedupe_key))
         return refs
 
-    async def _run_command(self, args: list[str]) -> tuple[str, str]:
+    async def _run_command(self, args: list[str], *, operation: str) -> tuple[str, str]:
         process = await asyncio.create_subprocess_exec(
             *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await process.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=self.config.download_timeout_seconds,
+            )
+        except asyncio.TimeoutError as exc:
+            process.kill()
+            stdout, stderr = await process.communicate()
+            out_text = stdout.decode("utf-8", errors="ignore")
+            err_text = stderr.decode("utf-8", errors="ignore")
+            detail = err_text.strip() or out_text.strip()
+            raise DownloadError(
+                f"gallery-dl {operation} 超时（>{self.config.download_timeout_seconds}s）。"
+                + (f" {detail[:180]}" if detail else "")
+            ) from exc
         out_text = stdout.decode("utf-8", errors="ignore")
         err_text = stderr.decode("utf-8", errors="ignore")
         if process.returncode != 0:

@@ -11,7 +11,6 @@ Group=CHANGE_ME
 WorkingDirectory=/opt/tg-ig-bot/telegram_ig_bot
 Environment=PYTHONUNBUFFERED=1
 Environment=PATH=/opt/tg-ig-bot/telegram_ig_bot/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-EnvironmentFile=/opt/tg-ig-bot/telegram_ig_bot/.env
 ExecStart=/opt/tg-ig-bot/telegram_ig_bot/.venv/bin/python -m app.main
 Restart=always
 RestartSec=20

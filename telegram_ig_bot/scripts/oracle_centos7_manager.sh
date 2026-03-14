@@ -103,6 +103,7 @@ usage() {
   refresh-session   重新生成 Instagram session
   update            拉取最新代码并重装依赖
   update-tools      仅更新 Instaloader / gallery-dl / yt-dlp 并自检
+  fix-perms         修复 /opt 目录权限与 SELinux context
   restart           重启服务
   start             启动服务
   stop              停止服务
@@ -670,6 +671,24 @@ refresh_instagram_session() {
   log "Instagram session 已刷新：$APP_DIR/data/instagram.session"
 }
 
+selinux_enabled() {
+  command -v getenforce >/dev/null 2>&1 || return 1
+  [[ "$(getenforce)" != "Disabled" ]]
+}
+
+repair_runtime_permissions() {
+  log "修复运行目录权限与 SELinux context"
+  run_root mkdir -p "$INSTALL_DIR" "$APP_DIR" "$APP_DIR/data" "$APP_DIR/logs" "$APP_DIR/data/tmp"
+  run_root chown -R "$RUN_USER:$RUN_GROUP" "$INSTALL_DIR"
+  run_root chmod 755 "$INSTALL_DIR" "$APP_DIR" "$APP_DIR/data" "$APP_DIR/logs" "$APP_DIR/data/tmp"
+  [[ -d "$VENV_DIR" ]] && run_root chmod -R u=rwX,go=rX "$VENV_DIR"
+  [[ -f "$ENV_FILE" ]] && run_root chmod 600 "$ENV_FILE"
+  [[ -f "$SCRIPT_PATH" ]] && run_root chmod 755 "$SCRIPT_PATH"
+  if selinux_enabled && command -v restorecon >/dev/null 2>&1; then
+    run_root restorecon -RFv "$INSTALL_DIR" || true
+  fi
+}
+
 write_systemd_units() {
   local run_user="${1:-$RUN_USER}"
   local run_group="${2:-$RUN_GROUP}"
@@ -691,7 +710,6 @@ Environment=PATH=$VENV_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 Environment=LD_LIBRARY_PATH=$(openssl_lib_dir "$RUNTIME_DIR/openssl-3.0")
 Environment=SSL_CERT_FILE=$(system_ca_bundle_file || true)
 Environment=SSL_CERT_DIR=$(system_ca_bundle_dir || true)
-EnvironmentFile=$ENV_FILE
 ExecStart=$VENV_DIR/bin/python -m app.main
 Restart=always
 RestartSec=20
@@ -752,13 +770,17 @@ EOF"
 }
 
 start_service() {
+  repair_runtime_permissions
   run_root systemctl enable "$SERVICE_NAME"
   run_root systemctl enable "${WATCHDOG_NAME}.timer"
   run_root systemctl restart "$SERVICE_NAME"
   run_root systemctl restart "${WATCHDOG_NAME}.timer"
 }
 stop_service() { run_root systemctl stop "$SERVICE_NAME" || true; }
-restart_service() { run_root systemctl restart "$SERVICE_NAME"; }
+restart_service() {
+  repair_runtime_permissions
+  run_root systemctl restart "$SERVICE_NAME"
+}
 
 show_status() {
   run_root systemctl status "$SERVICE_NAME" --no-pager || true
@@ -864,6 +886,7 @@ update_code() {
   git_in_install_dir checkout "$branch"
   git_in_install_dir pull --ff-only origin "$branch"
   install_python_dependencies
+  repair_runtime_permissions
   run "$(venv_python_bin)" -m compileall "$APP_DIR/app"
   restart_service
   cleanup_cache
@@ -886,6 +909,7 @@ update_downloader_tools() {
 }
 
 doctor() {
+  repair_runtime_permissions
   echo "安装目录：$INSTALL_DIR"
   echo "应用目录：$APP_DIR"
   echo "虚拟环境：$VENV_DIR"
@@ -893,10 +917,27 @@ doctor() {
   echo "运行用户：$RUN_USER"
   echo "磁盘剩余：$(df -h "$INSTALL_DIR" | awk 'NR==2{print $4}')"
   if [[ -f "$ENV_FILE" ]]; then
+    echo "配置文件权限：$(stat -c '%U:%G %a %n' "$ENV_FILE" 2>/dev/null || echo unavailable)"
+  fi
+  if [[ -f "$ENV_FILE" ]]; then
     load_env_file
     echo "管理员 TG：$ADMIN_TG_USER_ID"
     echo "默认轮询：${DEFAULT_POLL_INTERVAL_MINUTES:-unknown} 分钟"
     echo "日志文件：$APP_DIR/logs/telegram_ig_bot.log"
+  fi
+  if command -v namei >/dev/null 2>&1 && [[ -f "$ENV_FILE" ]]; then
+    echo "路径穿透检查："
+    namei -om "$ENV_FILE" || true
+  fi
+  if selinux_enabled; then
+    echo "SELinux：$(getenforce)"
+    command -v ls >/dev/null 2>&1 && ls -ldZ "$INSTALL_DIR" "$APP_DIR" "$VENV_DIR" "$ENV_FILE" 2>/dev/null || true
+    if command -v ausearch >/dev/null 2>&1; then
+      echo "最近 AVC 拒绝："
+      ausearch -m AVC -ts recent 2>/dev/null | tail -n 20 || true
+    fi
+  else
+    echo "SELinux：Disabled"
   fi
   [[ -x "$(python_bin)" ]] && echo "Python：$("$(python_bin)" -V 2>&1)"
   [[ -x "$VENV_DIR/bin/pip" ]] && echo "aiogram：$($VENV_DIR/bin/pip show aiogram 2>/dev/null | awk '/Version:/{print $2}')"
@@ -911,7 +952,7 @@ install_or_repair() {
   install_python_dependencies
   configure_env_interactive
   write_systemd_units "$RUN_USER" "$RUN_GROUP"
-  run_root chown -R "$RUN_USER:$RUN_GROUP" "$INSTALL_DIR"
+  repair_runtime_permissions
   if [[ -f "$ENV_FILE" ]]; then
     load_env_file
     if [[ -n "${INSTAGRAM_USERNAME:-}" ]]; then
@@ -966,12 +1007,13 @@ menu() {
 3. 刷新 Instagram session
 4. 更新代码并重启
 5. 仅更新下载工具
-6. 重启服务
-7. 查看状态
-8. 查看日志
-9. 清理缓存
-10. 体检 doctor
-11. 卸载
+6. 修复权限 / SELinux
+7. 重启服务
+8. 查看状态
+9. 查看日志
+10. 清理缓存
+11. 体检 doctor
+12. 卸载
 0. 退出
 ======================================
 EOF
@@ -983,12 +1025,13 @@ EOF
       3) refresh_instagram_session ;;
       4) update_code ;;
       5) update_downloader_tools ;;
-      6) restart_service ;;
-      7) show_status ;;
-      8) show_logs ;;
-      9) cleanup_cache ;;
-      10) doctor ;;
-      11) uninstall_everything ;;
+      6) repair_runtime_permissions ;;
+      7) restart_service ;;
+      8) show_status ;;
+      9) show_logs ;;
+      10) cleanup_cache ;;
+      11) doctor ;;
+      12) uninstall_everything ;;
       0) break ;;
       *) warn '无效选项' ;;
     esac
@@ -1005,6 +1048,7 @@ main() {
     refresh-session) refresh_instagram_session ;;
     update) update_code ;;
     update-tools) update_downloader_tools ;;
+    fix-perms) repair_runtime_permissions ;;
     restart) restart_service ;;
     start) start_service ;;
     stop) stop_service ;;

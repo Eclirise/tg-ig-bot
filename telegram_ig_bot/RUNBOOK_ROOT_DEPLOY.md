@@ -1,135 +1,63 @@
 # Root Deploy Runbook
 
-This runbook matches the current Oracle/CentOS 7 deployment where the repo lives in `/root/tg-ig-bot` and the bot runs as `root`.
+适用于你已经 `sudo -i`，并且代码位于 `/opt/tg-ig-bot` 的情况。
 
-## SSH In And Enter Repo
-
-```bash
-sudo -i
-cd /root/tg-ig-bot/telegram_ig_bot
-```
-
-## Pull Latest Code
-
-If you are already inside `/root/tg-ig-bot`:
+## 更新代码
 
 ```bash
+cd /opt/tg-ig-bot
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
 git fetch --all --tags --prune
 git checkout "$branch"
 git pull --ff-only origin "$branch"
 ```
 
-If you just want the common case:
+## 重启服务
 
 ```bash
-cd /root/tg-ig-bot
-git fetch --all --tags --prune
-git checkout main
-git pull --ff-only origin main
+cd /opt/tg-ig-bot
+bash telegram_ig_bot/scripts/oracle_centos7_manager.sh restart
 ```
 
-## Restart Or Start The Bot
+## 查看状态
 
 ```bash
-cd /root/tg-ig-bot/telegram_ig_bot
-bash scripts/oracle_centos7_manager.sh restart
+cd /opt/tg-ig-bot
+bash telegram_ig_bot/scripts/oracle_centos7_manager.sh status
 ```
 
-If the service was never started:
+## 看日志
 
 ```bash
-cd /root/tg-ig-bot/telegram_ig_bot
-bash scripts/oracle_centos7_manager.sh start
+cd /opt/tg-ig-bot
+bash telegram_ig_bot/scripts/oracle_centos7_manager.sh logs
 ```
 
-## Check Service Status
+## 一键更新
 
 ```bash
-cd /root/tg-ig-bot/telegram_ig_bot
-bash scripts/oracle_centos7_manager.sh status
+cd /opt/tg-ig-bot
+bash telegram_ig_bot/scripts/oracle_centos7_manager.sh update
 ```
 
-Direct systemd check:
+## 修复权限 / SELinux
 
 ```bash
-systemctl status telegram_ig_bot --no-pager
+cd /opt/tg-ig-bot
+bash telegram_ig_bot/scripts/oracle_centos7_manager.sh fix-perms
 ```
 
-Healthy output includes:
-
-```text
-Active: active (running)
-```
-
-## Follow Logs
+需要看最近 SELinux AVC 的话：
 
 ```bash
-cd /root/tg-ig-bot/telegram_ig_bot
-bash scripts/oracle_centos7_manager.sh logs
+ausearch -m AVC -ts recent
 ```
 
-Or inspect recent systemd logs once:
+## 日常检查
 
 ```bash
-journalctl -u telegram_ig_bot -n 80 --no-pager
-```
-
-## Full Update Flow
-
-Use this after the local script fix is present on the server:
-
-```bash
-sudo -i
-cd /root/tg-ig-bot/telegram_ig_bot
-bash scripts/oracle_centos7_manager.sh update
-```
-
-That command pulls code, refreshes dependencies, compiles the app, restarts the service, cleans caches, and prints status.
-
-## Common Daily Commands
-
-```bash
-sudo -i
-cd /root/tg-ig-bot/telegram_ig_bot
-
-bash scripts/oracle_centos7_manager.sh status
-bash scripts/oracle_centos7_manager.sh logs
-bash scripts/oracle_centos7_manager.sh restart
-bash scripts/oracle_centos7_manager.sh doctor
-```
-
-If `/usr/local/bin/tg-ig-botctl` exists, these are equivalent:
-
-```bash
-sudo -i
 tg-ig-botctl status
 tg-ig-botctl logs
-tg-ig-botctl restart
-tg-ig-botctl update
+tg-ig-botctl doctor
+tg-ig-botctl fix-perms
 ```
-
-## If Update Fails On Old Git
-
-CentOS 7 may ship a git that breaks on `git -C`. Use the manual pull flow instead:
-
-```bash
-sudo -i
-cd /root/tg-ig-bot
-branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
-git fetch --all --tags --prune
-git checkout "$branch"
-git pull --ff-only origin "$branch"
-cd /root/tg-ig-bot/telegram_ig_bot
-bash scripts/oracle_centos7_manager.sh restart
-bash scripts/oracle_centos7_manager.sh status
-```
-
-## Quick Functional Check In Telegram
-
-1. Open a private chat with the bot.
-2. Send `/start`.
-3. Send `/chatid` or `/stats`.
-4. Send `/ig <instagram_url>` or `/tg <instagram_url>`.
-
-If the bot replies and logs stay clean, the deployment is healthy.

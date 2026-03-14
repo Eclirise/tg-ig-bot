@@ -174,6 +174,8 @@ main() {
 
   [[ -f "$INSTALL_DIR/telegram_ig_bot/scripts/oracle_centos7_manager.sh" ]] || die '仓库中未找到 telegram_ig_bot/scripts/oracle_centos7_manager.sh。'
   bash "$INSTALL_DIR/telegram_ig_bot/scripts/oracle_centos7_manager.sh" install --repo-url "$REPO_URL" --branch "$BRANCH"
+  bash "$INSTALL_DIR/telegram_ig_bot/scripts/oracle_centos7_manager.sh" fix-perms
+  bash "$INSTALL_DIR/telegram_ig_bot/scripts/oracle_centos7_manager.sh" status
 }
 
 main "$@"

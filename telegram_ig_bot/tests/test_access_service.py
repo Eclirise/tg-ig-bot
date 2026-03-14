@@ -67,3 +67,18 @@ def test_admin_target_chat_setting_round_trip(config_factory, tmp_path) -> None:
 
     service.clear_admin_target_chat_id(config.admin_tg_user_id)
     assert service.get_admin_target_chat_id(config.admin_tg_user_id) is None
+
+
+def test_access_request_alert_setting_round_trip(config_factory, tmp_path) -> None:
+    config = config_factory()
+    db = Database(tmp_path / "settings-alerts.sqlite3")
+    db.initialize()
+    service = SettingsService(db, config)
+
+    assert service.access_request_alerts_enabled() is True
+
+    service.set_access_request_alerts_enabled(False)
+    assert service.access_request_alerts_enabled() is False
+
+    service.set_access_request_alerts_enabled(True)
+    assert service.access_request_alerts_enabled() is True
