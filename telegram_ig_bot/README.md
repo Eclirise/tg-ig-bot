@@ -1,6 +1,6 @@
 # telegram_ig_bot
 
-一个适合 Oracle / CentOS 7 小机器的 Telegram 解析机器人，支持 Instagram 和 YouTube 链接直发解析，也支持 Instagram 订阅轮询。
+一个适合 Oracle / EL 系 / Debian / Ubuntu 小机器的 Telegram 解析机器人，支持 Instagram 和 YouTube 链接直发解析，也支持 Instagram 订阅轮询。
 
 ## 现在的关键能力
 
@@ -46,7 +46,17 @@ cp .env.example .env
 python -m app.main
 ```
 
-## Oracle / CentOS 7 快速部署
+## Linux 快速部署
+
+当前部署脚本已适配：
+
+- CentOS 7
+- CentOS Stream 8 / 9
+- Oracle Linux 7 / 8 / 9
+- Rocky Linux / AlmaLinux / RHEL 8+
+- Debian / Ubuntu
+
+说明：脚本文件名仍然叫 `oracle_centos7_manager.sh` / `bootstrap_telegram_ig_bot_centos7.sh`，只是为了兼容旧路径，实际已不是只支持 CentOS 7。
 
 从拉代码开始：
 

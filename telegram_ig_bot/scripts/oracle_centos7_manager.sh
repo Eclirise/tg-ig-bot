@@ -97,6 +97,8 @@ usage() {
   cat <<EOF
 用法：bash scripts/oracle_centos7_manager.sh <命令>
 
+支持系统：CentOS 7、CentOS Stream 8/9、Oracle Linux、Rocky、Alma、RHEL 8+、Debian、Ubuntu
+
 命令：
   install           首次安装或修复安装
   configure         重新写入 .env 配置
@@ -137,13 +139,78 @@ parse_common_flags() {
   REMAINING_ARGS=("$@")
 }
 
-ensure_centos7() {
-  [[ -f /etc/centos-release ]] || die "当前系统不是 CentOS 7，脚本按 CentOS 7 编写。"
-  grep -q 'release 7' /etc/centos-release || die "当前系统不是 CentOS 7。"
+OS_ID=""
+OS_VERSION_ID=""
+OS_ID_LIKE=""
+OS_MAJOR_VERSION=""
+PKG_MGR=""
+
+load_os_release() {
+  if [[ -n "$OS_ID" ]]; then
+    return
+  fi
+  [[ -f /etc/os-release ]] || die "当前系统缺少 /etc/os-release，无法识别发行版。"
+  # shellcheck disable=SC1091
+  source /etc/os-release
+  OS_ID="${ID:-unknown}"
+  OS_VERSION_ID="${VERSION_ID:-0}"
+  OS_ID_LIKE="${ID_LIKE:-}"
+  OS_MAJOR_VERSION="${OS_VERSION_ID%%.*}"
+
+  if command -v apt-get >/dev/null 2>&1; then
+    PKG_MGR="apt-get"
+  elif command -v dnf >/dev/null 2>&1; then
+    PKG_MGR="dnf"
+  elif command -v yum >/dev/null 2>&1; then
+    PKG_MGR="yum"
+  else
+    die "未找到支持的包管理器，当前仅支持 apt-get / dnf / yum。"
+  fi
+}
+
+is_rhel_like() {
+  load_os_release
+  [[ "$OS_ID" =~ ^(centos|rhel|rocky|almalinux|ol|oracle|fedora)$ || "$OS_ID_LIKE" == *rhel* || "$OS_ID_LIKE" == *fedora* ]]
+}
+
+is_debian_like() {
+  load_os_release
+  [[ "$OS_ID" =~ ^(debian|ubuntu|linuxmint|pop)$ || "$OS_ID_LIKE" == *debian* || "$OS_ID_LIKE" == *ubuntu* ]]
+}
+
+is_centos7() {
+  load_os_release
+  [[ "$OS_ID" == "centos" && "$OS_MAJOR_VERSION" == "7" ]]
+}
+
+package_update_metadata() {
+  load_os_release
+  case "$PKG_MGR" in
+    apt-get) run_root apt-get update ;;
+    dnf) run_root dnf makecache -y ;;
+    yum) run_root yum makecache -y ;;
+  esac
+}
+
+package_install() {
+  load_os_release
+  case "$PKG_MGR" in
+    apt-get)
+      run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+      ;;
+    dnf)
+      run_root dnf install -y "$@"
+      ;;
+    yum)
+      run_root yum install -y "$@"
+      ;;
+  esac
 }
 
 configure_centos7_vault_repos() {
-  ensure_centos7
+  if ! is_centos7; then
+    return
+  fi
   local marker="/etc/yum.repos.d/CentOS-Vault-7.9.2009.repo"
   if [[ -f "$marker" ]]; then
     return
@@ -192,40 +259,95 @@ EOF"
 }
 
 install_system_packages() {
-  configure_centos7_vault_repos
-  run_root yum install -y git curl wget tar xz make which findutils ca-certificates bzip2 patch perl perl-IPC-Cmd
-  run_root yum install -y gcc gcc-c++ zlib-devel bzip2-devel readline-devel sqlite-devel libffi-devel xz-devel ncurses-devel gdbm-devel tk-devel libuuid-devel openssl-devel
-  run_root yum install -y firewalld || true
-  run_root yum install -y centos-release-scl-rh centos-release-scl || true
-  if ! run_root yum install -y devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-binutils; then
-    run_root yum install -y devtoolset-10-gcc devtoolset-10-gcc-c++ devtoolset-10-binutils
+  load_os_release
+  if is_rhel_like; then
+    configure_centos7_vault_repos
+    package_update_metadata
+    package_install git curl wget tar xz make which findutils ca-certificates bzip2 patch perl perl-IPC-Cmd gcc gcc-c++ zlib-devel bzip2-devel readline-devel sqlite-devel libffi-devel xz-devel ncurses-devel gdbm-devel tk-devel libuuid-devel openssl-devel
+    package_install firewalld || true
+    if [[ "$OS_MAJOR_VERSION" == "7" ]]; then
+      if [[ "$OS_ID" == "centos" ]]; then
+        package_install centos-release-scl-rh centos-release-scl || true
+      fi
+      package_install devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-binutils || \
+        package_install devtoolset-10-gcc devtoolset-10-gcc-c++ devtoolset-10-binutils || true
+    else
+      package_install gcc-toolset-12-gcc gcc-toolset-12-gcc-c++ gcc-toolset-12-binutils || \
+        package_install gcc-toolset-11-gcc gcc-toolset-11-gcc-c++ gcc-toolset-11-binutils || true
+    fi
+    return
   fi
+
+  if is_debian_like; then
+    package_update_metadata
+    package_install git curl wget tar xz-utils make patch perl pkg-config ca-certificates findutils bzip2 build-essential zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev libffi-dev liblzma-dev libncursesw5-dev libgdbm-dev tk-dev uuid-dev libssl-dev
+    package_install firewalld || true
+    return
+  fi
+
+  die "当前系统暂未适配：$OS_ID $OS_VERSION_ID。已支持 EL7/EL8+/Debian/Ubuntu。"
 }
 
 configure_firewall() {
+  load_os_release
   if ! command -v firewall-cmd >/dev/null 2>&1; then
-    warn "???? firewalld??????????"
+    warn "当前未安装 firewalld，跳过防火墙配置。"
     return
   fi
   run_root systemctl enable firewalld >/dev/null 2>&1 || true
   run_root systemctl start firewalld >/dev/null 2>&1 || true
   run_root firewall-cmd --permanent --add-service=ssh >/dev/null 2>&1 || true
   run_root firewall-cmd --reload >/dev/null 2>&1 || true
-  log "??????????? SSH??? bot ??????????????????"
+  log "已确保防火墙保留 SSH 访问。"
+}
+
+gcc_major_version() {
+  if ! command -v gcc >/dev/null 2>&1; then
+    echo 0
+    return 1
+  fi
+  gcc -dumpversion | awk -F. '{print $1}'
+}
+
+toolchain_source_snippet() {
+  local candidate
+  for candidate in \
+    /opt/rh/gcc-toolset-12/enable \
+    /opt/rh/gcc-toolset-11/enable \
+    /opt/rh/gcc-toolset-10/enable \
+    /opt/rh/devtoolset-11/enable \
+    /opt/rh/devtoolset-10/enable; do
+    if [[ -f "$candidate" ]]; then
+      printf "source '%s'" "$candidate"
+      return 0
+    fi
+  done
+  printf "true"
+}
+
+toolchain_shell_prefix() {
+  local snippet
+  snippet="$(toolchain_source_snippet)"
+  if [[ "$snippet" == "true" ]]; then
+    printf ""
+  else
+    printf "%s; " "$snippet"
+  fi
 }
 
 enable_devtoolset() {
-  if [[ -f /opt/rh/devtoolset-11/enable ]]; then
-    # shellcheck disable=SC1091
-    source /opt/rh/devtoolset-11/enable
+  local snippet
+  snippet="$(toolchain_source_snippet)"
+  if [[ "$snippet" != "true" ]]; then
+    # shellcheck disable=SC1090
+    eval "$snippet"
     return
   fi
-  if [[ -f /opt/rh/devtoolset-10/enable ]]; then
-    # shellcheck disable=SC1091
-    source /opt/rh/devtoolset-10/enable
-    return
+  if is_rhel_like && [[ "$OS_MAJOR_VERSION" == "7" ]]; then
+    if [[ "$(gcc_major_version || echo 0)" -lt 8 ]]; then
+      die "EL7 需要 devtoolset/gcc-toolset 才能编译 Python 3.11，请先检查仓库源。"
+    fi
   fi
-  die "没有找到可用的 devtoolset，请先检查 yum 源。"
 }
 
 fetch_latest_python_311_version() {
@@ -254,18 +376,19 @@ build_runtime() {
   enable_devtoolset
   run mkdir -p "$BUILD_DIR" "$RUNTIME_DIR"
 
-  local openssl_version python_version openssl_prefix python_prefix openssl_libdir
+  local openssl_version python_version openssl_prefix python_prefix openssl_libdir toolchain_prefix
   openssl_version="$(fetch_latest_openssl_30_version)"
   python_version="$(fetch_latest_python_311_version)"
   openssl_prefix="$RUNTIME_DIR/openssl-3.0"
   python_prefix="$RUNTIME_DIR/python-3.11"
   openssl_libdir="$(openssl_lib_dir "$openssl_prefix")"
+  toolchain_prefix="$(toolchain_shell_prefix)"
 
   if [[ ! -x "$openssl_prefix/bin/openssl" || "$(LD_LIBRARY_PATH="$openssl_libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$openssl_prefix/bin/openssl" version 2>/dev/null | awk '{print $2}')" != "$openssl_version" ]]; then
     log "编译 OpenSSL ${openssl_version}"
     rm -rf "$BUILD_DIR/openssl-$openssl_version" "$BUILD_DIR/openssl-$openssl_version.tar.gz"
     run_root bash -lc "cd '$BUILD_DIR' && curl -fsSLO 'https://www.openssl.org/source/openssl-${openssl_version}.tar.gz' && tar -xzf 'openssl-${openssl_version}.tar.gz'"
-    run_root bash -lc "source /opt/rh/devtoolset-11/enable 2>/dev/null || source /opt/rh/devtoolset-10/enable 2>/dev/null || true; cd '$BUILD_DIR/openssl-${openssl_version}' && ./Configure --prefix='$openssl_prefix' --openssldir='$openssl_prefix/ssl' linux-x86_64 shared zlib && make -j1 && make install_sw"
+    run_root bash -lc "${toolchain_prefix}cd '$BUILD_DIR/openssl-${openssl_version}' && ./Configure --prefix='$openssl_prefix' --openssldir='$openssl_prefix/ssl' linux-x86_64 shared zlib && make -j1 && make install_sw"
     openssl_libdir="$(openssl_lib_dir "$openssl_prefix")"
   fi
 
@@ -291,7 +414,7 @@ PY
     rm -rf "$python_prefix"
     rm -rf "$BUILD_DIR/Python-$python_version" "$BUILD_DIR/Python-$python_version.tgz"
     run_root bash -lc "cd '$BUILD_DIR' && curl -fsSLO 'https://www.python.org/ftp/python/${python_version}/Python-${python_version}.tgz' && tar -xzf 'Python-${python_version}.tgz'"
-    run_root bash -lc "source /opt/rh/devtoolset-11/enable 2>/dev/null || source /opt/rh/devtoolset-10/enable 2>/dev/null || true; export LD_LIBRARY_PATH='$openssl_libdir':\"\${LD_LIBRARY_PATH:-}\"; cd '$BUILD_DIR/Python-${python_version}' && CPPFLAGS='-I${openssl_prefix}/include' LDFLAGS='-L${openssl_libdir} -Wl,-rpath,${openssl_libdir}' ./configure --prefix='$python_prefix' --with-openssl='$openssl_prefix' --with-openssl-rpath=auto --with-ensurepip=install && make -j1 && make install"
+    run_root bash -lc "${toolchain_prefix}export LD_LIBRARY_PATH='$openssl_libdir':\"\${LD_LIBRARY_PATH:-}\"; cd '$BUILD_DIR/Python-${python_version}' && CPPFLAGS='-I${openssl_prefix}/include' LDFLAGS='-L${openssl_libdir} -Wl,-rpath,${openssl_libdir}' ./configure --prefix='$python_prefix' --with-openssl='$openssl_prefix' --with-openssl-rpath=auto --with-ensurepip=install && make -j1 && make install"
   fi
 
   python_supports_ssl "$python_prefix/bin/python3.11" || die "Python 构建失败：ssl 模块不可用，请检查 $BUILD_DIR/Python-${python_version} 下的 configure 输出与 Modules/_ssl 构建日志"
@@ -671,6 +794,10 @@ refresh_instagram_session() {
   log "Instagram session 已刷新：$APP_DIR/data/instagram.session"
 }
 
+require_systemd() {
+  command -v systemctl >/dev/null 2>&1 || die "当前系统缺少 systemd/systemctl，部署脚本暂不支持该环境。"
+}
+
 selinux_enabled() {
   command -v getenforce >/dev/null 2>&1 || return 1
   [[ "$(getenforce)" != "Disabled" ]]
@@ -690,6 +817,7 @@ repair_runtime_permissions() {
 }
 
 write_systemd_units() {
+  require_systemd
   local run_user="${1:-$RUN_USER}"
   local run_group="${2:-$RUN_GROUP}"
 
@@ -770,25 +898,32 @@ EOF"
 }
 
 start_service() {
+  require_systemd
   repair_runtime_permissions
   run_root systemctl enable "$SERVICE_NAME"
   run_root systemctl enable "${WATCHDOG_NAME}.timer"
   run_root systemctl restart "$SERVICE_NAME"
   run_root systemctl restart "${WATCHDOG_NAME}.timer"
 }
-stop_service() { run_root systemctl stop "$SERVICE_NAME" || true; }
+stop_service() {
+  require_systemd
+  run_root systemctl stop "$SERVICE_NAME" || true
+}
 restart_service() {
+  require_systemd
   repair_runtime_permissions
   run_root systemctl restart "$SERVICE_NAME"
 }
 
 show_status() {
+  require_systemd
   run_root systemctl status "$SERVICE_NAME" --no-pager || true
   echo
   doctor
 }
 
 show_logs() {
+  require_systemd
   if [[ -f "$APP_DIR/logs/telegram_ig_bot.log" ]]; then
     tail -n 200 -F "$APP_DIR/logs/telegram_ig_bot.log"
     return
@@ -815,7 +950,12 @@ cleanup_cache() {
     fi
   fi
   run_root journalctl --vacuum-size=20M >/dev/null 2>&1 || true
-  run_root yum clean all >/dev/null 2>&1 || true
+  load_os_release
+  case "$PKG_MGR" in
+    apt-get) run_root apt-get clean >/dev/null 2>&1 || true ;;
+    dnf) run_root dnf clean all >/dev/null 2>&1 || true ;;
+    yum) run_root yum clean all >/dev/null 2>&1 || true ;;
+  esac
 }
 
 send_alert_message() {
@@ -848,6 +988,7 @@ ${detail}" "systemd_$(echo "$title" | tr ' ' '_')" 900
 }
 
 internal_watchdog() {
+  require_systemd
   load_env_file
   local free_mb tmp_mb
   free_mb="$(df -Pm "$INSTALL_DIR" | awk 'NR==2{print $4}')"
@@ -910,6 +1051,9 @@ update_downloader_tools() {
 
 doctor() {
   repair_runtime_permissions
+  load_os_release
+  echo "系统：$OS_ID $OS_VERSION_ID"
+  echo "包管理器：$PKG_MGR"
   echo "安装目录：$INSTALL_DIR"
   echo "应用目录：$APP_DIR"
   echo "虚拟环境：$VENV_DIR"
@@ -942,7 +1086,11 @@ doctor() {
   [[ -x "$(python_bin)" ]] && echo "Python：$("$(python_bin)" -V 2>&1)"
   [[ -x "$VENV_DIR/bin/pip" ]] && echo "aiogram：$($VENV_DIR/bin/pip show aiogram 2>/dev/null | awk '/Version:/{print $2}')"
   show_downloader_tool_versions
-  echo "systemd：$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo unknown)"
+  if command -v systemctl >/dev/null 2>&1; then
+    echo "systemd：$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo unknown)"
+  else
+    echo "systemd：missing"
+  fi
 }
 
 install_or_repair() {
@@ -985,6 +1133,7 @@ EOF
 }
 
 uninstall_everything() {
+  require_systemd
   local confirm
   confirm="$(prompt_value '这会停止服务并删除整个安装目录。确认请输入 DELETE' '')"
   [[ "$confirm" == "DELETE" ]] || die '已取消卸载。'

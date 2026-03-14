@@ -11,6 +11,9 @@ usage() {
 Usage:
   bash bootstrap_telegram_ig_bot_centos7.sh --repo-url <git_url> [--branch main] [--install-dir /opt/tg-ig-bot]
 
+Supports:
+  CentOS 7, CentOS Stream 8/9, Oracle Linux, Rocky, Alma, RHEL 8+, Debian, Ubuntu
+
 Examples:
   curl -fsSL https://raw.githubusercontent.com/Eclirise/tg-ig-bot/main/bootstrap_telegram_ig_bot_centos7.sh | \
     bash -s -- --repo-url https://github.com/Eclirise/tg-ig-bot.git --branch main --install-dir /opt/tg-ig-bot
@@ -33,9 +36,35 @@ run_root() {
   fi
 }
 
+OS_ID=""
+OS_VERSION_ID=""
+PKG_MGR=""
+
+load_os_release() {
+  if [[ -n "$OS_ID" ]]; then
+    return
+  fi
+  [[ -f /etc/os-release ]] || die '当前系统缺少 /etc/os-release，无法识别发行版。'
+  # shellcheck disable=SC1091
+  source /etc/os-release
+  OS_ID="${ID:-unknown}"
+  OS_VERSION_ID="${VERSION_ID:-0}"
+  if command -v apt-get >/dev/null 2>&1; then
+    PKG_MGR="apt-get"
+  elif command -v dnf >/dev/null 2>&1; then
+    PKG_MGR="dnf"
+  elif command -v yum >/dev/null 2>&1; then
+    PKG_MGR="yum"
+  else
+    die '未找到支持的包管理器，当前仅支持 apt-get / dnf / yum。'
+  fi
+}
+
 prepare_centos7_repo() {
-  [[ -f /etc/centos-release ]] || die '当前系统不是 CentOS。'
-  grep -q 'release 7' /etc/centos-release || die '当前系统不是 CentOS 7。'
+  load_os_release
+  if [[ "$OS_ID" != "centos" || "${OS_VERSION_ID%%.*}" != "7" ]]; then
+    return
+  fi
   local marker="/etc/yum.repos.d/CentOS-Vault-7.9.2009.repo"
   if [[ -f "$marker" ]]; then
     return
@@ -83,14 +112,37 @@ EOF"
   run_root yum makecache -y
 }
 
+install_prerequisites() {
+  load_os_release
+  case "$PKG_MGR" in
+    apt-get)
+      run_root apt-get update
+      run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y git curl
+      ;;
+    dnf)
+      run_root dnf makecache -y
+      run_root dnf install -y git curl
+      ;;
+    yum)
+      run_root yum makecache -y
+      run_root yum install -y git curl
+      ;;
+  esac
+}
+
 configure_firewall() {
-  run_root yum install -y firewalld >/dev/null 2>&1 || true
+  load_os_release
+  case "$PKG_MGR" in
+    apt-get) run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y firewalld >/dev/null 2>&1 || true ;;
+    dnf) run_root dnf install -y firewalld >/dev/null 2>&1 || true ;;
+    yum) run_root yum install -y firewalld >/dev/null 2>&1 || true ;;
+  esac
   if command -v firewall-cmd >/dev/null 2>&1; then
     run_root systemctl enable firewalld >/dev/null 2>&1 || true
     run_root systemctl start firewalld >/dev/null 2>&1 || true
     run_root firewall-cmd --permanent --add-service=ssh >/dev/null 2>&1 || true
     run_root firewall-cmd --reload >/dev/null 2>&1 || true
-    log '??????????? SSH?bot ??????????????????'
+    log '已确保防火墙保留 SSH 访问。'
   fi
 }
 
@@ -143,7 +195,7 @@ parse_args() {
 main() {
   parse_args "$@"
   prepare_centos7_repo
-  run_root yum install -y git curl
+  install_prerequisites
   configure_firewall
 
   if [[ -z "$REPO_URL" ]]; then

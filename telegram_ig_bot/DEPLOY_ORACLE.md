@@ -1,6 +1,8 @@
-# Oracle / CentOS 7 部署指南
+# Oracle / Linux 部署指南
 
-这份文档针对 Oracle Linux 7 / CentOS 7，默认安装到 `/opt/tg-ig-bot`。
+这份文档默认安装到 `/opt/tg-ig-bot`，脚本已适配 Oracle Linux、CentOS Stream、Rocky、Alma、RHEL、Debian、Ubuntu。
+
+说明：脚本文件名仍保留 `oracle_centos7_manager.sh` / `bootstrap_telegram_ig_bot_centos7.sh`，只是为了兼容旧用法。
 
 ## 1. 从拉代码开始部署
 
@@ -14,7 +16,7 @@ bash telegram_ig_bot/scripts/oracle_centos7_manager.sh install
 
 脚本会自动完成：
 
-- 切换 CentOS 7 vault 源
+- 在 CentOS 7 时切换 vault 源
 - 编译 OpenSSL 3.0 / Python 3.11
 - 建立虚拟环境并安装依赖
 - 交互写入 `.env`
