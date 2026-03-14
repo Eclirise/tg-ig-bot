@@ -1,42 +1,18 @@
 from __future__ import annotations
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
-
-from app.bot import texts
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 
 
-def main_menu_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="解析链接"), KeyboardButton(text="查看订阅")],
-            [KeyboardButton(text="新增订阅"), KeyboardButton(text="运行状态")],
-            [KeyboardButton(text="帮助"), KeyboardButton(text="命令列表")],
-            [KeyboardButton(text="设置")],
-        ],
-        resize_keyboard=True,
-    )
+def main_menu_keyboard() -> ReplyKeyboardRemove:
+    return ReplyKeyboardRemove(remove_keyboard=True)
 
 
-def subscription_menu_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="查看订阅"), KeyboardButton(text="新增订阅")],
-            [KeyboardButton(text="修改订阅"), KeyboardButton(text="退订")],
-            [KeyboardButton(text=texts.CANCEL_ACTION_TEXT)],
-        ],
-        resize_keyboard=True,
-    )
+def subscription_menu_keyboard() -> ReplyKeyboardRemove:
+    return ReplyKeyboardRemove(remove_keyboard=True)
 
 
-def settings_menu_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="轮询频率"), KeyboardButton(text="审核通知")],
-            [KeyboardButton(text="运行状态")],
-            [KeyboardButton(text=texts.CANCEL_ACTION_TEXT)],
-        ],
-        resize_keyboard=True,
-    )
+def settings_menu_keyboard() -> ReplyKeyboardRemove:
+    return ReplyKeyboardRemove(remove_keyboard=True)
 
 
 def add_subscription_mode_keyboard() -> InlineKeyboardMarkup:
